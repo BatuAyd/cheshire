@@ -1,0 +1,28 @@
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&family=STIX+Two+Text:ital,wght@0,400..700;1,400..700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,600;1,600&display=swap");
+@import "tailwindcss";
+
+/* Base styles */
+body {
+  background-color: #FEFEFE;
+  color: theme("colors.neutral.800");
+  min-height: 100vh;
+  font-family: "Noto Sans", sans-serif;
+}
+
+/* Add padding to account for a fixed navbar */
+main {
+  padding-top: 4rem; /* 16px * 4 = 64px */
+}
+
+@media (min-width: 768px) {
+  main {
+    padding-top: 5rem; /* 16px * 5 = 80px */
+  }
+}
+
+/* Additional styles for long content to test scrolling and blur effect */
+.content-section {
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+}
