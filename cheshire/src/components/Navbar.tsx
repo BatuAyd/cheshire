@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { useDisconnect } from "wagmi";
 import { useAuthStore } from "../store/authStore";
 import CustomSignIn from "./CustomSignIn";
 
@@ -9,7 +10,10 @@ const Navbar = () => {
   const [scrolled, setScrolled] = useState<boolean>(false);
 
   // Get auth state from Zustand store
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, logout } = useAuthStore();
+
+  // Get disconnect function
+  const { disconnect } = useDisconnect();
 
   // Get current location for active link highlighting
   const location = useLocation();
@@ -27,6 +31,20 @@ const Navbar = () => {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, [scrolled]);
+
+  const handleDisconnect = () => {
+    disconnect();
+    console.log("Wallet disconnected");
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await logout();
+      console.log("Signed out successfully");
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
 
   return (
     <nav
@@ -48,9 +66,6 @@ const Navbar = () => {
         {/* Navigation Links - Show only when authenticated */}
         {isAuthenticated && (
           <div className="hidden md:flex items-center ml-8 space-x-6">
-            <NavLink to="/voting" active={location.pathname === "/voting"}>
-              Vote
-            </NavLink>
             <NavLink
               to="/proposals"
               active={location.pathname === "/proposals"}
@@ -58,16 +73,16 @@ const Navbar = () => {
               Proposals
             </NavLink>
             <NavLink
-              to="/create-proposal"
-              active={location.pathname === "/create-proposal"}
+              to="/categories"
+              active={location.pathname === "/categories"}
             >
-              Create Proposal
+              Categories
             </NavLink>
           </div>
         )}
       </div>
 
-      {/* Right side: Connect/Sign buttons */}
+      {/* Right side: Connect/Sign/Profile buttons */}
       <div className="flex items-center gap-3">
         {/* Connect Wallet Button */}
         <ConnectButton.Custom>
@@ -88,6 +103,7 @@ const Navbar = () => {
                 className="flex gap-3"
               >
                 {(() => {
+                  // Not connected - show Connect Wallet button
                   if (!connected) {
                     return (
                       <button
@@ -100,6 +116,7 @@ const Navbar = () => {
                     );
                   }
 
+                  // Connected but wrong network
                   if (chain.unsupported) {
                     return (
                       <button
@@ -112,18 +129,71 @@ const Navbar = () => {
                     );
                   }
 
-                  return (
-                    <div className="flex items-center gap-2">
-                      {/* Custom Sign In Button */}
-                      <CustomSignIn />
+                  // Connected and correct network but not authenticated
+                  if (!isAuthenticated) {
+                    // Show Sign In + Disconnect buttons
+                    return (
+                      <div className="flex items-center gap-3">
+                        {/* Sign In Button */}
+                        <CustomSignIn />
 
-                      {/* Profile Button (replaces Account Button) */}
+                        {/* Disconnect Button */}
+                        <button
+                          onClick={handleDisconnect}
+                          className="px-4 py-2 rounded-lg bg-neutral-200 text-neutral-700 font-medium transition-all hover:bg-neutral-300 active:scale-95 flex items-center gap-2"
+                        >
+                          <span>Disconnect</span>
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  // Authenticated - show Profile + Sign Out
+                  return (
+                    <div className="flex items-center gap-3">
+                      {/* Profile Button */}
                       <button
                         onClick={() => navigate("/profile")}
                         type="button"
                         className="px-4 py-2 rounded-lg bg-orange-400 text-white font-medium transition-all hover:shadow-md hover:bg-orange-500 active:scale-95 select-none cursor-pointer"
                       >
                         Profile
+                      </button>
+
+                      {/* Sign Out Button */}
+                      <button
+                        onClick={handleSignOut}
+                        className="px-4 py-2 rounded-lg bg-neutral-200 text-neutral-700 font-medium transition-all hover:bg-neutral-300 active:scale-95 flex items-center gap-2"
+                      >
+                        <span>Sign Out</span>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-5 w-5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                          />
+                        </svg>
                       </button>
                     </div>
                   );

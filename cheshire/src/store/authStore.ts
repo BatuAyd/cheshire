@@ -1,45 +1,134 @@
 import { create } from 'zustand';
 import { useEffect } from 'react';
 
-// Define the auth store state type
+// Cache configuration
+const CACHE_DURATION = 6 * 60 * 1000; // 6 minutes in milliseconds
+const CACHE_KEY = 'cheshire_auth_cache';
+
+// Types
+interface AuthCache {
+  isAuthenticated: boolean;
+  userAddress: string | null;
+  timestamp: number;
+}
+
 interface AuthState {
   // State
   isAuthenticated: boolean;
   isAuthenticating: boolean;
   userAddress: string | null;
   serverError: boolean;
+  lastCacheCheck: number;
   
   // Actions
   setIsAuthenticating: (isAuthenticating: boolean) => void;
   setAuthenticated: (isAuthenticated: boolean, address?: string | null) => void;
   setServerError: (hasError: boolean) => void;
-  checkAuthStatus: () => Promise<void>;
+  checkAuthStatus: (forceCheck?: boolean) => Promise<void>;
   logout: () => Promise<void>;
+  clearCache: () => void;
 }
 
+// Cache helpers
+const getCachedAuth = (): AuthCache | null => {
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (!cached) return null;
+    
+    const parsed: AuthCache = JSON.parse(cached);
+    const now = Date.now();
+    
+    // Check if cache is still valid
+    if (now - parsed.timestamp > CACHE_DURATION) {
+      localStorage.removeItem(CACHE_KEY);
+      return null;
+    }
+    
+    return parsed;
+  } catch (error) {
+    console.error('Error reading auth cache:', error);
+    localStorage.removeItem(CACHE_KEY);
+    return null;
+  }
+};
+
+const setCachedAuth = (isAuthenticated: boolean, userAddress: string | null) => {
+  try {
+    const cacheData: AuthCache = {
+      isAuthenticated,
+      userAddress,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+  } catch (error) {
+    console.error('Error setting auth cache:', error);
+  }
+};
+
+const clearCachedAuth = () => {
+  try {
+    localStorage.removeItem(CACHE_KEY);
+  } catch (error) {
+    console.error('Error clearing auth cache:', error);
+  }
+};
+
 // Create the Zustand store
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   // Initial state
   isAuthenticated: false,
   isAuthenticating: false,
   userAddress: null,
   serverError: false,
+  lastCacheCheck: 0,
   
   // Actions
   setIsAuthenticating: (isAuthenticating) => set({ isAuthenticating }),
   
-  setAuthenticated: (isAuthenticated, address = null) => set({ 
-    isAuthenticated, 
-    userAddress: address,
-    isAuthenticating: false 
-  }),
+  setAuthenticated: (isAuthenticated, address = null) => {
+    // Update cache when auth state changes
+    setCachedAuth(isAuthenticated, address);
+    
+    set({ 
+      isAuthenticated, 
+      userAddress: address,
+      isAuthenticating: false,
+      lastCacheCheck: Date.now()
+    });
+  },
   
   setServerError: (hasError) => set({ serverError: hasError }),
   
-  checkAuthStatus: async () => {
+  clearCache: () => {
+    clearCachedAuth();
+    set({ lastCacheCheck: 0 });
+  },
+  
+  checkAuthStatus: async (forceCheck = false) => {
+    const state = get();
+    const now = Date.now();
+    
+    // If not forcing check, try to use cache first
+    if (!forceCheck) {
+      const cached = getCachedAuth();
+      if (cached) {
+        console.log('🟢 Using cached auth status (no server call)');
+        set({
+          isAuthenticated: cached.isAuthenticated,
+          userAddress: cached.userAddress,
+          isAuthenticating: false,
+          serverError: false,
+          lastCacheCheck: now
+        });
+        return;
+      }
+    }
+    
+    // Cache miss or forced check - call server
+    console.log('🔵 Checking auth status with server');
     set({ isAuthenticating: true });
+    
     try {
-      // Use a timeout to prevent hanging if server is down
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
@@ -52,26 +141,38 @@ export const useAuthStore = create<AuthState>((set) => ({
       
       const data = await response.json();
       
+      // Update both state and cache
+      const isAuth = data.authenticated || false;
+      const address = data.address || null;
+      
+      setCachedAuth(isAuth, address);
+      
       set({ 
-        isAuthenticated: data.authenticated || false, 
-        userAddress: data.address || null,
+        isAuthenticated: isAuth, 
+        userAddress: address,
         isAuthenticating: false,
-        serverError: false
+        serverError: false,
+        lastCacheCheck: now
       });
+      
     } catch (error) {
       console.error('Failed to check auth status:', error);
+      
+      // Clear cache on error
+      clearCachedAuth();
+      
       set({ 
         isAuthenticated: false, 
         userAddress: null,
         isAuthenticating: false,
-        serverError: true
+        serverError: true,
+        lastCacheCheck: now
       });
     }
   },
   
   logout: async () => {
     try {
-      // Use a timeout to prevent hanging if server is down
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
@@ -83,29 +184,63 @@ export const useAuthStore = create<AuthState>((set) => ({
       
       clearTimeout(timeoutId);
       
+      // Clear cache and update state
+      clearCachedAuth();
       set({ 
         isAuthenticated: false, 
         userAddress: null,
-        serverError: false
+        serverError: false,
+        lastCacheCheck: Date.now()
       });
+      
     } catch (error) {
       console.error('Logout error:', error);
-      // Still log the user out locally even if server call fails
+      
+      // Still log out locally and clear cache
+      clearCachedAuth();
       set({ 
         isAuthenticated: false, 
         userAddress: null,
-        serverError: true
+        serverError: true,
+        lastCacheCheck: Date.now()
       });
     }
   },
 }));
 
-// Hook to initialize auth
+// Enhanced hook for auth synchronization
 export const useAuthSync = () => {
-  // Check auth status on mount
   useEffect(() => {
+    console.log('🚀 Initializing auth sync');
+    
+    // Always check on app startup (but try cache first)
     useAuthStore.getState().checkAuthStatus();
+    
+    // Set up periodic cache refresh
+    const interval = setInterval(() => {
+      const { lastCacheCheck } = useAuthStore.getState();
+      const now = Date.now();
+      
+      // If cache is older than 6 minutes, refresh it
+      if (now - lastCacheCheck > CACHE_DURATION) {
+        console.log('⏰ Cache expired, refreshing auth status');
+        useAuthStore.getState().checkAuthStatus();
+      }
+    }, CACHE_DURATION); // Check every 6 minutes
+    
+    return () => clearInterval(interval);
   }, []);
   
   return null;
+};
+
+// Hook to manually refresh auth (for wallet connection changes)
+export const useAuthRefresh = () => {
+  const checkAuthStatus = useAuthStore((state) => state.checkAuthStatus);
+  const clearCache = useAuthStore((state) => state.clearCache);
+  
+  return {
+    refreshAuth: () => checkAuthStatus(true), // Force server check
+    clearAuthCache: clearCache
+  };
 };

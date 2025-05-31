@@ -5,6 +5,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { config, queryClient } from "./config/wagmiRainbowKitConfig";
 import Navbar from "./components/Navbar";
 import { useAuthSync } from "./store/authStore";
+import { useWalletAuthSync } from "./hooks/useWalletAuthSync";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 // Placeholder page components
@@ -31,19 +32,6 @@ const LandingPage = () => (
   </div>
 );
 
-const VotingPage = () => (
-  <div>
-    <h1 className="text-3xl font-bold mb-4">Voting Dashboard</h1>
-    <p className="mb-4">This is a protected page for voting.</p>
-    <div className="p-4 bg-green-50 border border-green-200 rounded-md mb-4">
-      <p className="text-green-800">You are successfully authenticated! 🎉</p>
-    </div>
-    <p>
-      This page would contain the voting interface for the liquid voting app.
-    </p>
-  </div>
-);
-
 const ProposalsPage = () => (
   <div>
     <h1 className="text-3xl font-bold mb-4">Proposals</h1>
@@ -55,14 +43,14 @@ const ProposalsPage = () => (
   </div>
 );
 
-const CreateProposalPage = () => (
+const CategoriesPage = () => (
   <div>
-    <h1 className="text-3xl font-bold mb-4">Create Proposal</h1>
-    <p className="mb-4">This is a protected page for creating proposals.</p>
+    <h1 className="text-3xl font-bold mb-4">Categories</h1>
+    <p className="mb-4">This is a protected page for viewing categories.</p>
     <div className="p-4 bg-green-50 border border-green-200 rounded-md mb-4">
       <p className="text-green-800">You are successfully authenticated! 🎉</p>
     </div>
-    <p>This page would contain a form to create new proposals.</p>
+    <p>This page would list all available categories for proposals.</p>
   </div>
 );
 
@@ -106,7 +94,8 @@ const NotFoundPage = () => (
 
 // Component with auth sync
 const AuthSyncWrapper = ({ children }: { children: React.ReactNode }) => {
-  useAuthSync();
+  useAuthSync(); // Existing auth sync
+  useWalletAuthSync(); // New wallet sync
   return <>{children}</>;
 };
 
@@ -128,14 +117,6 @@ function App() {
 
                   {/* Protected routes - require authentication */}
                   <Route
-                    path="/voting"
-                    element={
-                      <ProtectedRoute>
-                        <VotingPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
                     path="/proposals"
                     element={
                       <ProtectedRoute>
@@ -144,10 +125,10 @@ function App() {
                     }
                   />
                   <Route
-                    path="/create-proposal"
+                    path="/categories"
                     element={
                       <ProtectedRoute>
-                        <CreateProposalPage />
+                        <CategoriesPage />
                       </ProtectedRoute>
                     }
                   />

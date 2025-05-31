@@ -36,8 +36,9 @@ const CustomSignIn = () => {
       const verifyData = await verifyResponse.json();
 
       if (verifyData.ok) {
-        // Update auth store
+        // Immediately update auth store (no server call needed)
         useAuthStore.getState().setAuthenticated(true, address);
+        console.log("✅ Signed in successfully - state updated immediately");
       } else {
         console.error("Verification failed:", verifyData.error);
       }
@@ -50,8 +51,9 @@ const CustomSignIn = () => {
 
   const handleSignOut = async () => {
     try {
-      await logout();
+      await logout(); // This already clears cache
       disconnect();
+      console.log("✅ Signed out successfully - cache cleared");
     } catch (error) {
       console.error("Error signing out:", error);
     }
