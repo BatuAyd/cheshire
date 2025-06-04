@@ -9,6 +9,7 @@ const CACHE_KEY = 'cheshire_auth_cache';
 interface AuthCache {
   isAuthenticated: boolean;
   userAddress: string | null;
+  userExists: boolean;
   timestamp: number;
 }
 
@@ -17,14 +18,18 @@ interface AuthState {
   isAuthenticated: boolean;
   isAuthenticating: boolean;
   userAddress: string | null;
+  userExists: boolean;
+  isCheckingUser: boolean;
   serverError: boolean;
   lastCacheCheck: number;
   
   // Actions
   setIsAuthenticating: (isAuthenticating: boolean) => void;
   setAuthenticated: (isAuthenticated: boolean, address?: string | null) => void;
+  setUserExists: (exists: boolean) => void;
   setServerError: (hasError: boolean) => void;
   checkAuthStatus: (forceCheck?: boolean) => Promise<void>;
+  checkUserExists: (forceCheck?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   clearCache: () => void;
 }
@@ -52,11 +57,12 @@ const getCachedAuth = (): AuthCache | null => {
   }
 };
 
-const setCachedAuth = (isAuthenticated: boolean, userAddress: string | null) => {
+const setCachedAuth = (isAuthenticated: boolean, userAddress: string | null, userExists: boolean = false) => {
   try {
     const cacheData: AuthCache = {
       isAuthenticated,
       userAddress,
+      userExists,
       timestamp: Date.now()
     };
     localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
@@ -79,6 +85,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
   isAuthenticating: false,
   userAddress: null,
+  userExists: false,
+  isCheckingUser: false,
   serverError: false,
   lastCacheCheck: 0,
   
@@ -86,8 +94,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setIsAuthenticating: (isAuthenticating) => set({ isAuthenticating }),
   
   setAuthenticated: (isAuthenticated, address = null) => {
-    // Update cache when auth state changes
-    setCachedAuth(isAuthenticated, address);
     
     set({ 
       isAuthenticated, 
@@ -95,17 +101,38 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       isAuthenticating: false,
       lastCacheCheck: Date.now()
     });
+    
+    // If user just got authenticated, check if they exist in database
+    if (isAuthenticated && address) {
+      get().checkUserExists();
+    } else {
+      // If not authenticated, user doesn't exist
+      setCachedAuth(isAuthenticated, address, false);
+      set({ userExists: false });
+    }
+  },
+  
+  setUserExists: (exists) => {
+    const state = get();
+    // Update cache with user existence
+    setCachedAuth(state.isAuthenticated, state.userAddress, exists);
+    set({ userExists: exists });
   },
   
   setServerError: (hasError) => set({ serverError: hasError }),
   
   clearCache: () => {
     clearCachedAuth();
-    set({ lastCacheCheck: 0 });
+    set({ 
+      isAuthenticated: false,
+      userAddress: null,
+      userExists: false,
+      isCheckingUser: false,
+      lastCacheCheck: 0 
+    });
   },
   
   checkAuthStatus: async (forceCheck = false) => {
-    const state = get();
     const now = Date.now();
     
     // If not forcing check, try to use cache first
@@ -116,7 +143,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({
           isAuthenticated: cached.isAuthenticated,
           userAddress: cached.userAddress,
+          userExists: cached.userExists,
           isAuthenticating: false,
+          isCheckingUser: false,
           serverError: false,
           lastCacheCheck: now
         });
@@ -145,8 +174,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const isAuth = data.authenticated || false;
       const address = data.address || null;
       
-      setCachedAuth(isAuth, address);
-      
       set({ 
         isAuthenticated: isAuth, 
         userAddress: address,
@@ -154,6 +181,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         serverError: false,
         lastCacheCheck: now
       });
+      
+      // If authenticated, check user existence
+      if (isAuth && address) {
+        get().checkUserExists();
+      } else {
+        setCachedAuth(isAuth, address, false);
+        set({ userExists: false, isCheckingUser: false });
+      }
       
     } catch (error) {
       console.error('Failed to check auth status:', error);
@@ -164,10 +199,59 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ 
         isAuthenticated: false, 
         userAddress: null,
+        userExists: false,
         isAuthenticating: false,
+        isCheckingUser: false,
         serverError: true,
         lastCacheCheck: now
       });
+    }
+  },
+  
+  // Check if user exists in database
+  checkUserExists: async (forceCheck = false) => {
+    const state = get();
+    
+    if (!state.isAuthenticated || !state.userAddress) {
+      set({ userExists: false, isCheckingUser: false });
+      return;
+    }
+    
+    // Use cache if available and not forcing check
+    if (!forceCheck) {
+      const cached = getCachedAuth();
+      if (cached && cached.userAddress === state.userAddress && cached.userExists !== undefined) {
+        set({ userExists: cached.userExists, isCheckingUser: false });
+        return;
+      }
+    }
+    
+    console.log('🔍 Checking if user exists in database');
+    set({ isCheckingUser: true });
+    
+    try {
+      const response = await fetch(
+        `http://localhost:8080/api/user/exists?address=${encodeURIComponent(state.userAddress)}`,
+        { credentials: 'include' }
+      );
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        const exists = data.exists || false;
+        
+        // Update cache and state
+        setCachedAuth(state.isAuthenticated, state.userAddress, exists);
+        set({ userExists: exists, isCheckingUser: false });
+        
+        console.log(`👤 User exists: ${exists}`);
+      } else {
+        console.error('Error checking user existence:', data.error);
+        set({ userExists: false, isCheckingUser: false });
+      }
+    } catch (error) {
+      console.error('Failed to check user existence:', error);
+      set({ userExists: false, isCheckingUser: false });
     }
   },
   
@@ -189,6 +273,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ 
         isAuthenticated: false, 
         userAddress: null,
+        userExists: false,
+        isCheckingUser: false,
         serverError: false,
         lastCacheCheck: Date.now()
       });
@@ -201,6 +287,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ 
         isAuthenticated: false, 
         userAddress: null,
+        userExists: false,
+        isCheckingUser: false,
         serverError: true,
         lastCacheCheck: Date.now()
       });
@@ -234,13 +322,16 @@ export const useAuthSync = () => {
   return null;
 };
 
+// STABLE function references - these don't change between renders
+const stableClearCache = () => useAuthStore.getState().clearCache();
+const stableRefreshAuth = () => useAuthStore.getState().checkAuthStatus(true);
+const stableCheckUserExists = () => useAuthStore.getState().checkUserExists(true);
+
 // Hook to manually refresh auth (for wallet connection changes)
 export const useAuthRefresh = () => {
-  const checkAuthStatus = useAuthStore((state) => state.checkAuthStatus);
-  const clearCache = useAuthStore((state) => state.clearCache);
-  
   return {
-    refreshAuth: () => checkAuthStatus(true), // Force server check
-    clearAuthCache: clearCache
+    refreshAuth: stableRefreshAuth,
+    clearAuthCache: stableClearCache,
+    checkUserExists: stableCheckUserExists
   };
 };

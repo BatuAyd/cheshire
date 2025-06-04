@@ -4,6 +4,9 @@ import cookieParser from "cookie-parser";
 import { SiweMessage, generateNonce } from "siwe";
 import { createClient } from 'redis';
 import dotenv from 'dotenv';
+import { testConnection } from './database/supabase.js';
+import { createUserRoutes } from './routes/userRoutes.js';
+
 
 // Load environment variables
 dotenv.config();
@@ -11,7 +14,7 @@ dotenv.config();
 // Initialize Express app
 const app = express();
 
-// ================ REDIS SETUP ================
+// ================ DATABASE AND REDIS SETUP ================
 
 const redis = createClient({
   url: process.env.REDIS_URL || 'redis://localhost:6379',
@@ -39,6 +42,19 @@ try {
 } catch (error) {
   console.error('❌ Failed to connect to Redis:', error);
   console.error('Make sure Redis is running: brew services start redis');
+  process.exit(1);
+}
+
+// Test Supabase connection
+try {
+  const supabaseConnected = await testConnection();
+  if (!supabaseConnected) {
+    console.error('❌ Failed to connect to Supabase');
+    console.error('Check your SUPABASE_URL and SUPABASE_ANON_KEY in .env file');
+    process.exit(1);
+  }
+} catch (error) {
+  console.error('❌ Supabase connection error:', error);
   process.exit(1);
 }
 
@@ -242,6 +258,12 @@ app.get("/api/debug/redis", async (req, res) => {
   }
 });
 
+// ================ USER ROUTES ================
+
+// Create user routes with Redis instance
+const userRoutes = createUserRoutes(redis);
+app.use('/api/user', userRoutes);
+
 // ================ GRACEFUL SHUTDOWN ================
 
 process.on('SIGTERM', async () => {
@@ -260,7 +282,7 @@ process.on('SIGINT', async () => {
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`🚀 Authentication server running on port ${PORT}`);
+  console.log(`⚙️ Authentication server running on port ${PORT}`);
   console.log(`📡 CORS configured for: ${process.env.FRONTEND_URL || "http://localhost:5173"}`);
   console.log(`⏰ Session TTL: ${SESSION_TTL} seconds (${SESSION_TTL/3600} hours)`);
 });

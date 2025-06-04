@@ -7,6 +7,9 @@ import Navbar from "./components/Navbar";
 import { useAuthSync } from "./store/authStore";
 import { useWalletAuthSync } from "./hooks/useWalletAuthSync";
 import ProtectedRoute from "./components/ProtectedRoute";
+import SetupGuard from "./components/setup/SetupGuard";
+import SetupPage from "./pages/SetupPage";
+import ProfilePage from "./pages/ProfilePage";
 
 // Placeholder page components
 const LandingPage = () => (
@@ -54,37 +57,6 @@ const CategoriesPage = () => (
   </div>
 );
 
-// New Profile Page component
-const ProfilePage = () => (
-  <div>
-    <h1 className="text-3xl font-bold mb-4">User Profile</h1>
-    <p className="mb-4">This is your user profile page.</p>
-
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div className="bg-white rounded-xl shadow-md p-6">
-        <h2 className="text-xl font-bold mb-4 text-neutral-800">
-          Wallet Information
-        </h2>
-        <div className="space-y-3">
-          <div>
-            <p className="text-sm text-neutral-500">Connected Address</p>
-            <p className="font-mono text-sm break-all">0x123...abc</p>
-          </div>
-          <div>
-            <p className="text-sm text-neutral-500">Network</p>
-            <p>Sepolia Testnet</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-md p-6">
-        <h2 className="text-xl font-bold mb-4 text-neutral-800">Activity</h2>
-        <p className="text-neutral-600">No recent activity to display.</p>
-      </div>
-    </div>
-  </div>
-);
-
 const NotFoundPage = () => (
   <div>
     <h1 className="text-3xl font-bold mb-4">404 - Page Not Found</h1>
@@ -114,6 +86,16 @@ function App() {
                 <Routes>
                   {/* Public route - accessible to everyone */}
                   <Route path="/" element={<LandingPage />} />
+
+                  {/* Setup route - authenticated users only, before profile creation */}
+                  <Route
+                    path="/setup"
+                    element={
+                      <SetupGuard>
+                        <SetupPage />
+                      </SetupGuard>
+                    }
+                  />
 
                   {/* Protected routes - require authentication */}
                   <Route
