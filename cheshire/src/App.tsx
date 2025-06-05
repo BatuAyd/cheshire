@@ -1,13 +1,22 @@
+// External Libraries
 import { QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider } from "wagmi";
 import { RainbowKitProvider } from "@rainbow-me/rainbowkit";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+
+// Configuration
 import { config, queryClient } from "./config/wagmiRainbowKitConfig";
-import Navbar from "./components/Navbar";
+
+// Hooks
 import { useAuthSync } from "./store/authStore";
 import { useWalletAuthSync } from "./hooks/useWalletAuthSync";
-import ProtectedRoute from "./components/ProtectedRoute";
+
+// Components
+import Navbar from "./components/navigation/Navbar";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 import SetupGuard from "./components/setup/SetupGuard";
+
+// Pages
 import SetupPage from "./pages/SetupPage";
 import ProfilePage from "./pages/ProfilePage";
 import CreateProposalPage from "./pages/CreateProposalPage";

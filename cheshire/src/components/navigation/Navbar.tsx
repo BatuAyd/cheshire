@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useDisconnect } from "wagmi";
-import { useAuthStore } from "../store/authStore";
-import CustomSignIn from "./CustomSignIn";
+import { useAuthStore } from "../../store/authStore";
+import CustomSignIn from "../auth/CustomSignIn";
 
 const Navbar = () => {
   // State to track scroll position for blur effect

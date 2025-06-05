@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAccount, useSignMessage, useDisconnect } from "wagmi";
-import { useAuthStore } from "../store/authStore";
+import { useAuthStore } from "../../store/authStore";
 
 const CustomSignIn = () => {
   const { address, isConnected } = useAccount();
