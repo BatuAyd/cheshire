@@ -140,7 +140,7 @@ You can use any PostgreSQL database instead of Supabase. Just update the connect
 
 #### Frontend (.env in cheshire/)
 ```env
-VITE_PROJECT_ID=your_walletconnect_project_id
+VITE_WALLETCONNECT_PROJECT_ID=your_walletconnect_project_id
 VITE_INFURA_API_KEY=your_infura_api_key
 ```
 
