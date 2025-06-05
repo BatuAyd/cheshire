@@ -110,7 +110,7 @@ function App() {
 
                   {/* Individual proposal route */}
                   <Route
-                    path="/proposals/:id"
+                    path="/proposal/:id"
                     element={
                       <ProtectedRoute>
                         <ProposalDetailPage />

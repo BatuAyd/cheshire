@@ -1,34 +1,23 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import ProposalCard from "../components/proposal/ProposalCard";
 import LoadingSkeleton from "../components/proposal/LoadingSkeleton";
 import EmptyState from "../components/proposal/EmptyState";
+import SortDropdown from "../components/proposal/SortDropdown";
+import FilterChips from "../components/proposal/FilterChips";
+import SearchBar from "../components/search/SearchBar";
+import PaginationControls from "../components/pagination/PaginationControls";
+import { useURLParams } from "../hooks/useURLParams";
+import {
+  processProposals,
+  calculateFilterCounts,
+  paginateItems,
+  calculatePagination,
+  ITEMS_PER_PAGE,
+} from "../utils/proposalUtils";
+import type { Proposal } from "../utils/proposalUtils";
 
 // Types
-interface ProposalOption {
-  option_number: number;
-  option_text: string;
-}
-
-interface Proposal {
-  proposal_id: string;
-  title: string;
-  description: string;
-  voting_deadline: string;
-  organization_id: string;
-  created_by: string;
-  created_at: string;
-  organizations: {
-    organization_name: string;
-  };
-  users: {
-    unique_id: string;
-    first_name: string;
-    last_name: string;
-  };
-  options: ProposalOption[];
-}
-
 interface ProposalsResponse {
   proposals: Proposal[];
   organization_id: string;
@@ -46,12 +35,45 @@ interface CanCreateResponse {
 const ProposalsPage: React.FC = () => {
   const navigate = useNavigate();
 
+  // URL params for sort, filter, search, and page state
+  const {
+    sort,
+    filter,
+    search,
+    page,
+    updateSort,
+    updateFilter,
+    updateSearch,
+    updatePage,
+    clearSearch,
+  } = useURLParams();
+
   // State
-  const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [allProposals, setAllProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
   const [organizationInfo, setOrganizationInfo] =
     useState<CanCreateResponse | null>(null);
+
+  // Processed proposals (searched, filtered, and sorted)
+  const processedProposals = useMemo(() => {
+    return processProposals(allProposals, search, filter, sort);
+  }, [allProposals, search, filter, sort]);
+
+  // Pagination calculations
+  const paginationInfo = useMemo(() => {
+    return calculatePagination(processedProposals.length, page, ITEMS_PER_PAGE);
+  }, [processedProposals.length, page]);
+
+  // Current page items
+  const currentPageProposals = useMemo(() => {
+    return paginateItems(processedProposals, page, ITEMS_PER_PAGE);
+  }, [processedProposals, page]);
+
+  // Filter counts for chip badges (based on all proposals, not search results)
+  const filterCounts = useMemo(() => {
+    return calculateFilterCounts(allProposals);
+  }, [allProposals]);
 
   // Load organization info and proposals
   useEffect(() => {
@@ -60,10 +82,11 @@ const ProposalsPage: React.FC = () => {
         setLoading(true);
         setError("");
 
-        // Load organization info and permissions in parallel
+        // Load more proposals to support pagination properly
+        // We'll load enough to show multiple pages
         const [proposalsResponse, canCreateResponse] = await Promise.all([
           fetch(
-            "http://localhost:8080/api/proposals/organization?limit=18&offset=0",
+            "http://localhost:8080/api/proposals/organization?limit=200&offset=0",
             {
               credentials: "include",
             }
@@ -77,7 +100,7 @@ const ProposalsPage: React.FC = () => {
         if (proposalsResponse.ok) {
           const proposalsData: ProposalsResponse =
             await proposalsResponse.json();
-          setProposals(proposalsData.proposals || []);
+          setAllProposals(proposalsData.proposals || []);
         } else {
           const proposalsError = await proposalsResponse.json();
           throw new Error(proposalsError.error || "Failed to load proposals");
@@ -105,8 +128,39 @@ const ProposalsPage: React.FC = () => {
     loadData();
   }, []);
 
+  // Auto-adjust page if current page is out of bounds
+  useEffect(() => {
+    if (
+      !loading &&
+      processedProposals.length > 0 &&
+      page > paginationInfo.totalPages
+    ) {
+      updatePage(1);
+    }
+  }, [
+    processedProposals.length,
+    page,
+    paginationInfo.totalPages,
+    updatePage,
+    loading,
+  ]);
+
   const handleCreateProposal = () => {
     navigate("/create-proposal");
+  };
+
+  // Determine if we should show empty state
+  const showEmptyState = !loading && processedProposals.length === 0;
+  const hasFiltersApplied =
+    filter !== "all" || sort !== "newest" || search.length > 0;
+  const isFilteredEmpty =
+    showEmptyState && hasFiltersApplied && allProposals.length > 0;
+
+  // Clear all filters and search
+  const handleClearAll = () => {
+    updateFilter("all");
+    updateSort("newest");
+    clearSearch();
   };
 
   // Error state
@@ -184,33 +238,116 @@ const ProposalsPage: React.FC = () => {
           )}
         </div>
 
+        {/* Search, Sort and Filter Controls */}
+        {!loading && allProposals.length > 0 && (
+          <div className="space-y-4 mb-6">
+            {/* Search Bar */}
+            <div>
+              <SearchBar
+                searchQuery={search}
+                onSearchChange={updateSearch}
+                onSearchClear={clearSearch}
+                placeholder="Search proposals by title, description, or creator..."
+                resultCount={processedProposals.length}
+                entityName="proposals"
+              />
+            </div>
+
+            {/* Filter and Sort Controls */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              {/* Filter Chips */}
+              <div>
+                <FilterChips
+                  currentFilter={filter}
+                  onFilterChange={updateFilter}
+                  proposalCounts={filterCounts}
+                />
+              </div>
+
+              {/* Sort Dropdown */}
+              <div>
+                <SortDropdown
+                  currentSort={sort}
+                  onSortChange={updateSort}
+                  proposalCount={processedProposals.length}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Main Content */}
         {loading ? (
           // Loading State - 18 skeleton cards
           <LoadingSkeleton />
-        ) : proposals.length === 0 ? (
-          // Empty State
-          <EmptyState
-            organizationName={organizationInfo?.organization_name || undefined}
-            canCreateProposals={organizationInfo?.can_create || false}
-          />
+        ) : showEmptyState ? (
+          // Empty State - different messages for filtered vs no proposals
+          isFilteredEmpty ? (
+            // Filtered empty state
+            <div className="flex flex-col items-center justify-center py-16 px-4">
+              <div className="w-24 h-24 bg-neutral-100 rounded-full flex items-center justify-center mb-6">
+                <svg
+                  className="w-12 h-12 text-neutral-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-neutral-800 mb-2">
+                No proposals found
+              </h3>
+              <p className="text-neutral-600 text-center max-w-md mb-6">
+                {search
+                  ? `No proposals match "${search}" with the current filters.`
+                  : "No proposals match your current filters."}{" "}
+                Try adjusting your search terms, filters, or sort options.
+              </p>
+              <button
+                onClick={handleClearAll}
+                className="px-4 py-2 bg-neutral-200 text-neutral-700 rounded-lg hover:bg-neutral-300 transition-colors"
+              >
+                Clear Search
+              </button>
+            </div>
+          ) : (
+            // No proposals at all
+            <EmptyState
+              organizationName={
+                organizationInfo?.organization_name || undefined
+              }
+              canCreateProposals={organizationInfo?.can_create || false}
+            />
+          )
         ) : (
           // Proposals Grid
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {proposals.map((proposal) => (
-              <ProposalCard key={proposal.proposal_id} proposal={proposal} />
+            {currentPageProposals.map((proposal) => (
+              <ProposalCard
+                key={proposal.proposal_id}
+                proposal={proposal}
+                searchQuery={search}
+              />
             ))}
           </div>
         )}
 
-        {/* Future: Pagination will go here in later phases */}
-        {!loading && proposals.length > 0 && (
-          <div className="mt-12 text-center text-neutral-500">
-            <p>
-              Showing {proposals.length} proposal
-              {proposals.length === 1 ? "" : "s"}
-            </p>
-            <p className="text-sm mt-1">Pagination placeholder</p>
+        {/* Pagination Controls */}
+        {!loading && !showEmptyState && (
+          <div className="mt-12">
+            <PaginationControls
+              currentPage={paginationInfo.currentPage}
+              totalItems={processedProposals.length}
+              itemsPerPage={ITEMS_PER_PAGE}
+              onPageChange={updatePage}
+              showingCount={currentPageProposals.length}
+            />
           </div>
         )}
       </div>

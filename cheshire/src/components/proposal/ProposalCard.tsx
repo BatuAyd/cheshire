@@ -1,45 +1,14 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { getProposalStatus } from "../../utils/proposalUtils";
+import TextHighlighter from "../search/TextHighlighter";
+import type { Proposal } from "../../utils/proposalUtils";
 
 // Types
-interface ProposalOption {
-  option_number: number;
-  option_text: string;
-}
-
-interface Proposal {
-  proposal_id: string;
-  title: string;
-  description: string;
-  voting_deadline: string;
-  organization_id: string;
-  created_by: string;
-  created_at: string;
-  organizations: {
-    organization_name: string;
-  };
-  users: {
-    unique_id: string;
-    first_name: string;
-    last_name: string;
-  };
-  options: ProposalOption[];
-}
-
 interface ProposalCardProps {
   proposal: Proposal;
+  searchQuery?: string;
 }
-
-// Status calculation logic
-const getProposalStatus = (voting_deadline: string) => {
-  const now = new Date();
-  const deadline = new Date(voting_deadline);
-  const hoursLeft = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60);
-
-  if (hoursLeft < 0) return "EXPIRED";
-  if (hoursLeft < 24) return "ENDING SOON";
-  return "ACTIVE";
-};
 
 // Get status badge styling
 const getStatusBadgeClass = (status: string) => {
@@ -94,7 +63,10 @@ const formatCreatedDate = (created_at: string) => {
   });
 };
 
-const ProposalCard: React.FC<ProposalCardProps> = ({ proposal }) => {
+const ProposalCard: React.FC<ProposalCardProps> = ({
+  proposal,
+  searchQuery = "",
+}) => {
   const navigate = useNavigate();
 
   const status = getProposalStatus(proposal.voting_deadline);
@@ -103,7 +75,7 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal }) => {
   const createdDate = formatCreatedDate(proposal.created_at);
 
   const handleCardClick = () => {
-    navigate(`/proposals/${proposal.proposal_id}`);
+    navigate(`/proposal/${proposal.proposal_id}`);
   };
 
   return (
@@ -126,21 +98,24 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal }) => {
         {/* Right padding to avoid status badge */}
         <span className="text-neutral-600 mt-1 flex-shrink-0">📋</span>
         <h3 className="text-lg font-semibold text-neutral-800 leading-tight">
-          {proposal.title}
+          <TextHighlighter text={proposal.title} searchQuery={searchQuery} />
         </h3>
       </div>
 
       {/* Description */}
       <p className="text-neutral-600 text-sm leading-relaxed mb-4">
-        {truncatedDescription}
+        <TextHighlighter
+          text={truncatedDescription}
+          searchQuery={searchQuery}
+        />
       </p>
 
       {/* Voting options count */}
       <div className="flex items-center gap-1 mb-2 text-sm text-neutral-600">
         <span>🗳️</span>
         <span>
-          {proposal.options.length} voting option
-          {proposal.options.length === 1 ? "" : "s"}
+          {proposal.options?.length || 0} voting option
+          {(proposal.options?.length || 0) === 1 ? "" : "s"}
         </span>
       </div>
 
@@ -150,7 +125,12 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal }) => {
         <span>{timeRemaining}</span>
         <span>•</span>
         <span>👤</span>
-        <span>{proposal.users.unique_id}</span>
+        <span>
+          <TextHighlighter
+            text={proposal.users.unique_id}
+            searchQuery={searchQuery}
+          />
+        </span>
       </div>
 
       {/* Created date */}

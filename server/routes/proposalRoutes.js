@@ -326,6 +326,58 @@ export const createProposalRoutes = (redis) => {
     }
   });
   
+  /**
+   * Get individual proposal by ID
+   * GET /api/proposals/:id
+   * Requires authentication and access to the proposal's organization
+   */
+  router.get('/:id', authRequired, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        return res.status(400).json({ 
+          error: 'Invalid proposal ID format' 
+        });
+      }
+      
+      // Get the proposal
+      const proposal = await proposalDb.getById(id);
+      
+      if (!proposal) {
+        return res.status(404).json({ 
+          error: 'Proposal not found' 
+        });
+      }
+      
+      // Check if user has access to this proposal (same organization)
+      const user = await userDb.getByWallet(req.walletAddress);
+      if (!user) {
+        return res.status(403).json({ 
+          error: 'User profile not found' 
+        });
+      }
+      
+      if (user.organization_id !== proposal.organization_id) {
+        return res.status(403).json({ 
+          error: 'You do not have access to this proposal' 
+        });
+      }
+      
+      res.status(200).json({ 
+        proposal
+      });
+      
+    } catch (error) {
+      console.error('Error getting proposal:', error);
+      res.status(500).json({ 
+        error: 'Failed to get proposal' 
+      });
+    }
+  });
+  
   return router;
 };
 
