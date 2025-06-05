@@ -291,40 +291,80 @@ export const proposalDb = {
 
   // Get proposals by organization
   async getByOrganization(organizationId, limit = 50, offset = 0) {
-    try {
-      const { data, error } = await supabase
-        .from('proposals')
-        .select(`
-          proposal_id,
-          title,
-          description,
-          voting_deadline,
-          organization_id,
-          created_by,
-          created_at,
-          organizations (
-            organization_name
-          ),
-          users (
-            unique_id,
-            first_name,
-            last_name
-          )
-        `)
-        .eq('organization_id', organizationId)
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
-        
-      if (error) {
-        throw error;
-      }
+  try {
+    // Get the proposals first
+    const { data: proposals, error: proposalsError } = await supabase
+      .from('proposals')
+      .select(`
+        proposal_id,
+        title,
+        description,
+        voting_deadline,
+        organization_id,
+        created_by,
+        created_at,
+        organizations (
+          organization_name
+        ),
+        users (
+          unique_id,
+          first_name,
+          last_name
+        )
+      `)
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
       
-      return data;
-    } catch (error) {
-      console.error('Error getting proposals by organization:', error);
-      throw error;
+    if (proposalsError) {
+      throw proposalsError;
     }
-  },
+    
+    if (!proposals || proposals.length === 0) {
+      return proposals || [];
+    }
+    
+    // Get proposal IDs to fetch options
+    const proposalIds = proposals.map(p => p.proposal_id);
+    
+    // Get all options for these proposals
+    const { data: options, error: optionsError } = await supabase
+      .from('proposal_options')
+      .select('proposal_id, option_number, option_text')
+      .in('proposal_id', proposalIds)
+      .order('option_number');
+      
+    if (optionsError) {
+      throw optionsError;
+    }
+    
+    // Group options by proposal_id
+    const optionsByProposal = {};
+    if (options) {
+      options.forEach(option => {
+        if (!optionsByProposal[option.proposal_id]) {
+          optionsByProposal[option.proposal_id] = [];
+        }
+        optionsByProposal[option.proposal_id].push({
+          option_number: option.option_number,
+          option_text: option.option_text
+        });
+      });
+    }
+    
+    // Combine proposals with their options
+    const proposalsWithOptions = proposals.map(proposal => ({
+      ...proposal,
+      options: optionsByProposal[proposal.proposal_id] || []
+    }));
+    
+    return proposalsWithOptions;
+    
+  } catch (error) {
+    console.error('Error getting proposals by organization:', error);
+    throw error;
+  }
+},
 
   // Get proposals by user
   async getByUser(walletAddress, limit = 50, offset = 0) {

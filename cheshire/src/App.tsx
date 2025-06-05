@@ -20,6 +20,8 @@ import SetupGuard from "./components/setup/SetupGuard";
 import SetupPage from "./pages/SetupPage";
 import ProfilePage from "./pages/ProfilePage";
 import CreateProposalPage from "./pages/CreateProposalPage";
+import ProposalsPage from "./pages/ProposalsPage";
+import ProposalDetailPage from "./pages/ProposalDetailPage";
 
 // Placeholder page components
 const LandingPage = () => (
@@ -41,40 +43,6 @@ const LandingPage = () => (
         <li>Sign the authentication message in your wallet</li>
         <li>Once authenticated, you'll have access to protected pages</li>
       </ol>
-    </div>
-  </div>
-);
-
-const ProposalsPage = () => (
-  <div>
-    <h1 className="text-3xl font-bold mb-4">Proposals</h1>
-    <p className="mb-4">This is a protected page for viewing proposals.</p>
-    <div className="p-4 bg-green-50 border border-green-200 rounded-md mb-4">
-      <p className="text-green-800">You are successfully authenticated! 🎉</p>
-    </div>
-    <p>This page would list all active and past proposals.</p>
-
-    {/* Temporary Create Proposal Button - will be replaced with proper navigation later */}
-    <div className="mt-6">
-      <a
-        href="/create-proposal"
-        className="inline-flex items-center px-4 py-2 bg-orange-400 text-white rounded-lg hover:bg-orange-500 transition-colors gap-2"
-      >
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 4v16m8-8H4"
-          />
-        </svg>
-        Create New Proposal
-      </a>
     </div>
   </div>
 );
@@ -139,6 +107,17 @@ function App() {
                       </ProtectedRoute>
                     }
                   />
+
+                  {/* Individual proposal route */}
+                  <Route
+                    path="/proposals/:id"
+                    element={
+                      <ProtectedRoute>
+                        <ProposalDetailPage />
+                      </ProtectedRoute>
+                    }
+                  />
+
                   <Route
                     path="/categories"
                     element={
