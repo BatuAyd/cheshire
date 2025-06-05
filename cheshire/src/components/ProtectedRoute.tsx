@@ -1,6 +1,6 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -10,6 +10,18 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { isAuthenticated, isAuthenticating, userExists, userAddress } =
     useAuthStore();
   const location = useLocation();
+  const [hasInitialized, setHasInitialized] = useState(false);
+
+  // Wait for auth to initialize before making decisions
+  useEffect(() => {
+    const isInitialized =
+      !isAuthenticating &&
+      (isAuthenticated && userAddress ? true : !isAuthenticated ? true : false);
+
+    if (isInitialized && !hasInitialized) {
+      setHasInitialized(true);
+    }
+  }, [isAuthenticated, isAuthenticating, userAddress, hasInitialized]);
 
   // Check if user exists when authenticated
   useEffect(() => {
@@ -29,8 +41,8 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     checkUser();
   }, [isAuthenticated, userAddress, userExists]);
 
-  // Show loading while checking authentication
-  if (isAuthenticating) {
+  // Show loading while auth is initializing or authenticating
+  if (isAuthenticating || !hasInitialized) {
     return (
       <div className="flex justify-center items-center min-h-[70vh]">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-400"></div>

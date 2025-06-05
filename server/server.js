@@ -6,6 +6,7 @@ import { createClient } from 'redis';
 import dotenv from 'dotenv';
 import { testConnection } from './database/supabase.js';
 import { createUserRoutes } from './routes/userRoutes.js';
+import { createProposalRoutes } from './routes/proposalRoutes.js';
 
 
 // Load environment variables
@@ -263,6 +264,12 @@ app.get("/api/debug/redis", async (req, res) => {
 // Create user routes with Redis instance
 const userRoutes = createUserRoutes(redis);
 app.use('/api/user', userRoutes);
+
+// ================ PROPOSAL ROUTES ================
+
+// Create proposal routes with Redis instance
+const proposalRoutes = createProposalRoutes(redis);
+app.use('/api/proposals', proposalRoutes);
 
 // ================ GRACEFUL SHUTDOWN ================
 

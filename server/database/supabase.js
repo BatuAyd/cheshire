@@ -182,3 +182,200 @@ export const organizationDb = {
     }
   }
 };
+
+// Proposal database functions
+export const proposalDb = {
+  // Create new proposal
+  async create(proposalData) {
+  try {
+    // Start a transaction by creating the proposal first
+    const { data: proposal, error: proposalError } = await supabase
+      .from('proposals')
+      .insert([{
+        title: proposalData.title.trim(),
+        description: proposalData.description.trim(),
+        voting_deadline: proposalData.voting_deadline,
+        organization_id: proposalData.organization_id,
+        created_by: proposalData.created_by.toLowerCase()
+      }])
+      .select()
+      .single();
+      
+    if (proposalError) {
+      throw proposalError;
+    }
+    
+    // Create the options
+    if (proposalData.options && proposalData.options.length > 0) {
+      const optionsData = proposalData.options.map((option, index) => ({
+        proposal_id: proposal.proposal_id,
+        option_number: index + 1,
+        option_text: option.trim()
+      }));
+      
+      const { error: optionsError } = await supabase
+        .from('proposal_options')
+        .insert(optionsData);
+        
+      if (optionsError) {
+        // If options failed, we should delete the proposal to maintain consistency
+        await supabase
+          .from('proposals')
+          .delete()
+          .eq('proposal_id', proposal.proposal_id);
+        throw optionsError;
+      }
+    }
+    
+    // Return the complete proposal with options
+    return await this.getById(proposal.proposal_id);
+    
+  } catch (error) {
+    console.error('Error creating proposal:', error);
+    throw error;
+  }
+},
+
+  // Get proposal by ID
+  async getById(proposalId) {
+  try {
+    // Get the proposal
+    const { data: proposal, error: proposalError } = await supabase
+      .from('proposals')
+      .select(`
+        proposal_id,
+        title,
+        description,
+        voting_deadline,
+        organization_id,
+        created_by,
+        created_at,
+        organizations (
+          organization_name
+        ),
+        users (
+          unique_id,
+          first_name,
+          last_name
+        )
+      `)
+      .eq('proposal_id', proposalId)
+      .single();
+      
+    if (proposalError) {
+      throw proposalError;
+    }
+    
+    // Get the options
+    const { data: options, error: optionsError } = await supabase
+      .from('proposal_options')
+      .select('option_number, option_text')
+      .eq('proposal_id', proposalId)
+      .order('option_number');
+      
+    if (optionsError) {
+      throw optionsError;
+    }
+    
+    // Combine proposal and options
+    return {
+      ...proposal,
+      options: options || []
+    };
+    
+  } catch (error) {
+    console.error('Error getting proposal by ID:', error);
+    throw error;
+  }
+},
+
+  // Get proposals by organization
+  async getByOrganization(organizationId, limit = 50, offset = 0) {
+    try {
+      const { data, error } = await supabase
+        .from('proposals')
+        .select(`
+          proposal_id,
+          title,
+          description,
+          voting_deadline,
+          organization_id,
+          created_by,
+          created_at,
+          organizations (
+            organization_name
+          ),
+          users (
+            unique_id,
+            first_name,
+            last_name
+          )
+        `)
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+        
+      if (error) {
+        throw error;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error getting proposals by organization:', error);
+      throw error;
+    }
+  },
+
+  // Get proposals by user
+  async getByUser(walletAddress, limit = 50, offset = 0) {
+    try {
+      const { data, error } = await supabase
+        .from('proposals')
+        .select(`
+          proposal_id,
+          title,
+          description,
+          voting_deadline,
+          organization_id,
+          created_by,
+          created_at,
+          organizations (
+            organization_name
+          )
+        `)
+        .eq('created_by', walletAddress.toLowerCase())
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+        
+      if (error) {
+        throw error;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error getting proposals by user:', error);
+      throw error;
+    }
+  },
+
+  // Check if user can create proposal (has completed profile and organization)
+  async canUserCreateProposal(walletAddress) {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('organization_id')
+        .eq('wallet_address', walletAddress.toLowerCase())
+        .single();
+        
+      if (error) {
+        throw error;
+      }
+      
+      // User must have an organization to create proposals
+      return !!data?.organization_id;
+    } catch (error) {
+      console.error('Error checking if user can create proposal:', error);
+      throw error;
+    }
+  }
+};

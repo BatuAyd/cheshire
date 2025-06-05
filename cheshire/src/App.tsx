@@ -10,6 +10,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import SetupGuard from "./components/setup/SetupGuard";
 import SetupPage from "./pages/SetupPage";
 import ProfilePage from "./pages/ProfilePage";
+import CreateProposalPage from "./pages/CreateProposalPage";
 
 // Placeholder page components
 const LandingPage = () => (
@@ -43,6 +44,29 @@ const ProposalsPage = () => (
       <p className="text-green-800">You are successfully authenticated! 🎉</p>
     </div>
     <p>This page would list all active and past proposals.</p>
+
+    {/* Temporary Create Proposal Button - will be replaced with proper navigation later */}
+    <div className="mt-6">
+      <a
+        href="/create-proposal"
+        className="inline-flex items-center px-4 py-2 bg-orange-400 text-white rounded-lg hover:bg-orange-500 transition-colors gap-2"
+      >
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M12 4v16m8-8H4"
+          />
+        </svg>
+        Create New Proposal
+      </a>
+    </div>
   </div>
 );
 
@@ -115,12 +139,22 @@ function App() {
                     }
                   />
 
-                  {/* New Profile route */}
+                  {/* Profile route */}
                   <Route
                     path="/profile"
                     element={
                       <ProtectedRoute>
                         <ProfilePage />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  {/* Create Proposal route */}
+                  <Route
+                    path="/create-proposal"
+                    element={
+                      <ProtectedRoute>
+                        <CreateProposalPage />
                       </ProtectedRoute>
                     }
                   />
