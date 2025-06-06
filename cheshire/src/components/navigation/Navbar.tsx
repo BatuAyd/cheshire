@@ -2,15 +2,19 @@ import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useDisconnect } from "wagmi";
-import { useAuthStore } from "../../store/authStore";
+import {
+  useSupabaseAuthStore,
+  useSupabaseAuthActions,
+} from "../../store/supabaseAuthStore";
 import CustomSignIn from "../auth/CustomSignIn";
 
 const Navbar = () => {
   // State to track scroll position for blur effect
   const [scrolled, setScrolled] = useState<boolean>(false);
 
-  // Get auth state from Zustand store
-  const { isAuthenticated, logout } = useAuthStore();
+  // Get auth state from JWT store
+  const { isAuthenticated } = useSupabaseAuthStore();
+  const { logout } = useSupabaseAuthActions();
 
   // Get disconnect function
   const { disconnect } = useDisconnect();
@@ -134,7 +138,7 @@ const Navbar = () => {
                     // Show Sign In + Disconnect buttons
                     return (
                       <div className="flex items-center gap-3">
-                        {/* Sign In Button */}
+                        {/* Sign In Button - CustomSignIn handles the logic */}
                         <CustomSignIn />
 
                         {/* Disconnect Button */}

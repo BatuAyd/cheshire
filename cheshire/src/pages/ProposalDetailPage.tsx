@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { apiFetch } from "../utils/api";
 import { getProposalStatus } from "../utils/proposalUtils";
 import type { Proposal } from "../utils/proposalUtils";
 
@@ -127,11 +128,8 @@ const ProposalDetailPage: React.FC = () => {
         setLoading(true);
         setError("");
 
-        const response = await fetch(
-          `http://localhost:8080/api/proposals/${id}`,
-          {
-            credentials: "include",
-          }
+        const response = await apiFetch(
+          "http://localhost:8080/api/user/profile"
         );
 
         if (response.status === 404) {

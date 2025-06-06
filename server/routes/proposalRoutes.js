@@ -1,59 +1,10 @@
 import express from 'express';
 import { proposalDb, userDb } from '../database/supabase.js';
+import { requireJwtAuth } from '../middleware/jwtAuth.js';
 
 const router = express.Router();
 
-// ================ HELPER FUNCTIONS ================
-
-/**
- * Get session from Redis (reuse from userRoutes.js logic)
- */
-const getSession = async (redis, sessionToken) => {
-  try {
-    const sessionData = await redis.get(`session:${sessionToken}`);
-    return sessionData ? JSON.parse(sessionData) : null;
-  } catch (error) {
-    console.error('Failed to get session:', error);
-    return null;
-  }
-};
-
-/**
- * Middleware to verify authentication via Redis session
- */
-const requireAuth = (redis) => {
-  return async (req, res, next) => {
-    try {
-      const sessionToken = req.cookies.auth_token;
-      
-      if (!sessionToken) {
-        return res.status(401).json({ 
-          error: 'Authentication required',
-          authenticated: false 
-        });
-      }
-      
-      const sessionData = await getSession(redis, sessionToken);
-      
-      if (!sessionData) {
-        res.clearCookie('auth_token');
-        return res.status(401).json({ 
-          error: 'Invalid or expired session',
-          authenticated: false 
-        });
-      }
-      
-      // Add session data to request for use in routes
-      req.session = sessionData;
-      req.walletAddress = sessionData.address;
-      next();
-      
-    } catch (error) {
-      console.error('Auth middleware error:', error);
-      res.status(500).json({ error: 'Authentication check failed' });
-    }
-  };
-};
+// ================ VALIDATION HELPERS ================
 
 /**
  * Validate proposal data
@@ -139,20 +90,18 @@ const validateProposalData = (data) => {
 // ================ ROUTE FACTORY ================
 
 /**
- * Create proposal routes with Redis instance
+ * Create proposal routes (now using JWT authentication)
  */
-export const createProposalRoutes = (redis) => {
-  // Auth middleware for this router
-  const authRequired = requireAuth(redis);
+export const createProposalRoutes = () => {
   
-  // ================ PROTECTED ENDPOINTS ================
+  // ================ PROTECTED ENDPOINTS (JWT REQUIRED) ================
   
   /**
    * Create new proposal
    * POST /api/proposals/create
-   * Requires authentication and completed profile with organization
+   * Requires JWT authentication and completed profile with organization
    */
-  router.post('/create', authRequired, async (req, res) => {
+  router.post('/create', requireJwtAuth, async (req, res) => {
     try {
       const { title, description, voting_deadline, options } = req.body;
       
@@ -165,7 +114,7 @@ export const createProposalRoutes = (redis) => {
         });
       }
       
-      // Get user's profile to check organization
+      // Get user's profile to check organization (req.walletAddress from JWT)
       const user = await userDb.getByWallet(req.walletAddress);
       if (!user) {
         return res.status(404).json({ 
@@ -242,13 +191,14 @@ export const createProposalRoutes = (redis) => {
   /**
    * Get user's proposals
    * GET /api/proposals/my-proposals?limit=20&offset=0
-   * Requires authentication
+   * Requires JWT authentication
    */
-  router.get('/my-proposals', authRequired, async (req, res) => {
+  router.get('/my-proposals', requireJwtAuth, async (req, res) => {
     try {
       const limit = Math.min(parseInt(req.query.limit) || 20, 100); // Max 100
       const offset = Math.max(parseInt(req.query.offset) || 0, 0);
       
+      // req.walletAddress from JWT middleware
       const proposals = await proposalDb.getByUser(req.walletAddress, limit, offset);
       
       res.status(200).json({ 
@@ -269,11 +219,11 @@ export const createProposalRoutes = (redis) => {
   /**
    * Get organization proposals
    * GET /api/proposals/organization?limit=20&offset=0
-   * Requires authentication
+   * Requires JWT authentication
    */
-  router.get('/organization', authRequired, async (req, res) => {
+  router.get('/organization', requireJwtAuth, async (req, res) => {
     try {
-      // Get user's organization
+      // Get user's organization (req.walletAddress from JWT)
       const user = await userDb.getByWallet(req.walletAddress);
       if (!user || !user.organization_id) {
         return res.status(403).json({ 
@@ -305,10 +255,11 @@ export const createProposalRoutes = (redis) => {
   /**
    * Check if user can create proposals
    * GET /api/proposals/can-create
-   * Requires authentication
+   * Requires JWT authentication
    */
-  router.get('/can-create', authRequired, async (req, res) => {
+  router.get('/can-create', requireJwtAuth, async (req, res) => {
     try {
+      // req.walletAddress from JWT middleware
       const canCreate = await proposalDb.canUserCreateProposal(req.walletAddress);
       const user = await userDb.getByWallet(req.walletAddress);
       
@@ -327,23 +278,22 @@ export const createProposalRoutes = (redis) => {
   });
   
   /**
-   * Get individual proposal by ID
+   * Get proposal by ID
    * GET /api/proposals/:id
-   * Requires authentication and access to the proposal's organization
+   * Requires JWT authentication
    */
-  router.get('/:id', authRequired, async (req, res) => {
+  router.get('/:id', requireJwtAuth, async (req, res) => {
     try {
       const { id } = req.params;
       
       // Validate UUID format
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(id)) {
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!uuidPattern.test(id)) {
         return res.status(400).json({ 
           error: 'Invalid proposal ID format' 
         });
       }
       
-      // Get the proposal
       const proposal = await proposalDb.getById(id);
       
       if (!proposal) {
@@ -352,26 +302,20 @@ export const createProposalRoutes = (redis) => {
         });
       }
       
-      // Check if user has access to this proposal (same organization)
+      // Check if user is in the same organization
       const user = await userDb.getByWallet(req.walletAddress);
-      if (!user) {
+      if (user && user.organization_id !== proposal.organization_id) {
         return res.status(403).json({ 
-          error: 'User profile not found' 
-        });
-      }
-      
-      if (user.organization_id !== proposal.organization_id) {
-        return res.status(403).json({ 
-          error: 'You do not have access to this proposal' 
+          error: 'You can only view proposals from your organization' 
         });
       }
       
       res.status(200).json({ 
-        proposal
+        proposal 
       });
       
     } catch (error) {
-      console.error('Error getting proposal:', error);
+      console.error('Error getting proposal by ID:', error);
       res.status(500).json({ 
         error: 'Failed to get proposal' 
       });

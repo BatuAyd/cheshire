@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { apiFetch } from "../utils/api";
 import ProposalCard from "../components/proposal/ProposalCard";
 import LoadingSkeleton from "../components/proposal/LoadingSkeleton";
 import EmptyState from "../components/proposal/EmptyState";
@@ -85,15 +86,10 @@ const ProposalsPage: React.FC = () => {
         // Load more proposals to support pagination properly
         // We'll load enough to show multiple pages
         const [proposalsResponse, canCreateResponse] = await Promise.all([
-          fetch(
-            "http://localhost:8080/api/proposals/organization?limit=200&offset=0",
-            {
-              credentials: "include",
-            }
+          apiFetch(
+            "http://localhost:8080/api/proposals/organization?limit=200&offset=0"
           ),
-          fetch("http://localhost:8080/api/proposals/can-create", {
-            credentials: "include",
-          }),
+          apiFetch("http://localhost:8080/api/proposals/can-create"),
         ]);
 
         // Handle proposals response

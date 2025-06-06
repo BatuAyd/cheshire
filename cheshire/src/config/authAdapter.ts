@@ -1,22 +1,22 @@
 import { createAuthenticationAdapter, AuthenticationStatus } from '@rainbow-me/rainbowkit';
-import { useAuthStore } from '../store/authStore';
+import { useSupabaseAuthStore, useSupabaseAuthActions } from '../store/supabaseAuthStore';
 
 /**
- * Creates a simplified authentication adapter for RainbowKit
+ * Creates a JWT authentication adapter for RainbowKit
  */
-export const createAdapter = () => {
+export const createJWTAdapter = () => {
   return createAuthenticationAdapter({
     /**
      * Get a nonce from the server
      */
     getNonce: async () => {
       try {
-        const response = await fetch('http://localhost:8080/api/nonce');
+        const response = await fetch('http://localhost:8080/api/auth/nonce');
         const { nonce } = await response.json();
         return nonce;
       } catch (error) {
         console.error('Failed to get nonce:', error);
-        useAuthStore.getState().setServerError(true);
+        useSupabaseAuthStore.getState().setServerError(true);
         throw new Error('Failed to get authentication nonce');
       }
     },
@@ -25,48 +25,61 @@ export const createAdapter = () => {
      * Create a simple message with the user's address, chainId, and nonce
      */
     createMessage: ({ nonce, address, chainId }) => {
-      // Create a simpler message format that works with MetaMask
       return {
         prepareMessage: () => {
-          // Format the message as a simple string
           return `Sign this message to authenticate with Cheshire.\n\nAddress: ${address}\nChain ID: ${chainId}\nNonce: ${nonce}`;
         }
       };
     },
 
     /**
-     * Verify the signature on the server
+     * Verify the signature and handle JWT authentication
      */
     verify: async ({ message, signature }) => {
       try {
-        // Get the prepared message string
         const messageString = message.prepareMessage();
         
-        // Send to server for verification
-        const verifyRes = await fetch('http://localhost:8080/api/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ 
-            message: messageString,
-            signature 
-          }),
-        });
-
-        const data = await verifyRes.json();
-        
-        if (data.ok) {
-          // Update auth store
-          useAuthStore.getState().setAuthenticated(true, data.address);
-          useAuthStore.getState().setServerError(false);
-          return true;
+        // Extract wallet address from message
+        const addressMatch = messageString.match(/Address: (0x[a-fA-F0-9]{40})/);
+        if (!addressMatch) {
+          console.error('Could not extract address from message');
+          return false;
         }
         
-        useAuthStore.getState().setServerError(false);
-        return false;
+        const walletAddress = addressMatch[1];
+        
+        // Get auth actions
+        const { checkUserStatus, signIn } = useSupabaseAuthActions();
+        
+        // First, check if user has completed profile setup
+        const userStatus = await checkUserStatus(walletAddress);
+        
+        if (!userStatus.exists) {
+          console.log('👤 User needs to complete profile setup');
+          // Update auth store to indicate user exists but needs setup
+          useSupabaseAuthStore.getState().setUserExists(false);
+          useSupabaseAuthStore.getState().setServerError(false);
+          
+          // Don't authenticate - user needs to complete setup first
+          return false;
+        }
+        
+        // User exists, attempt JWT sign in
+        const signInResult = await signIn(walletAddress, messageString, signature);
+        
+        if (signInResult.success) {
+          console.log('✅ JWT authentication successful via RainbowKit');
+          useSupabaseAuthStore.getState().setServerError(false);
+          return true;
+        } else {
+          console.log('❌ JWT authentication failed via RainbowKit:', signInResult.error);
+          useSupabaseAuthStore.getState().setServerError(false);
+          return false;
+        }
+        
       } catch (error) {
-        console.error('Verification error:', error);
-        useAuthStore.getState().setServerError(true);
+        console.error('RainbowKit verification error:', error);
+        useSupabaseAuthStore.getState().setServerError(true);
         return false;
       }
     },
@@ -75,7 +88,7 @@ export const createAdapter = () => {
      * Sign out
      */
     signOut: async () => {
-      await useAuthStore.getState().logout();
+      await useSupabaseAuthStore.getState().logout();
     },
   });
 };
@@ -83,9 +96,9 @@ export const createAdapter = () => {
 /**
  * Hook to create the auth adapter and get current authentication status
  */
-export const useAuthAdapter = () => {
+export const useJWTAuthAdapter = () => {
   // Get authentication state from Zustand store
-  const { isAuthenticated, isAuthenticating } = useAuthStore();
+  const { isAuthenticated, isAuthenticating } = useSupabaseAuthStore();
   
   // Convert auth state to RainbowKit format
   const authenticationStatus: AuthenticationStatus = 
@@ -94,7 +107,7 @@ export const useAuthAdapter = () => {
     'unauthenticated';
   
   // Create the adapter
-  const adapter = createAdapter();
+  const adapter = createJWTAdapter();
   
   return {
     adapter,

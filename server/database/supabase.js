@@ -34,7 +34,6 @@ export const testConnection = async () => {
       return false;
     }
     
-    console.log('✅ Supabase connection successful');
     return true;
   } catch (error) {
     console.error('❌ Supabase connection error:', error.message);
@@ -417,5 +416,23 @@ export const proposalDb = {
       console.error('Error checking if user can create proposal:', error);
       throw error;
     }
+  }
+};
+
+// Clean up expired sessions (call periodically)
+export const cleanupExpiredSessions = async () => {
+  try {
+    const { error } = await supabase
+      .from('user_sessions')
+      .delete()
+      .lt('expires_at', new Date().toISOString());
+
+    if (error) {
+      console.error('Error cleaning up sessions:', error);
+    } else {
+      console.log('✅ Expired sessions cleaned up');
+    }
+  } catch (error) {
+    console.error('Error cleaning up sessions:', error);
   }
 };

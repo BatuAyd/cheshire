@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { apiFetch } from "../utils/api";
 import ProfileInfo from "../components/profile/ProfileInfo";
 
 interface UserProfile {
@@ -25,9 +26,9 @@ const ProfilePage = () => {
         setLoading(true);
         setError("");
 
-        const response = await fetch("http://localhost:8080/api/user/profile", {
-          credentials: "include",
-        });
+        const response = await apiFetch(
+          "http://localhost:8080/api/user/profile"
+        );
 
         const data = await response.json();
 

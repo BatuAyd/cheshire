@@ -8,11 +8,12 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { config, queryClient } from "./config/wagmiRainbowKitConfig";
 
 // Hooks
-import { useAuthSync } from "./store/authStore";
+import { useJWTAuthSync } from "./store/supabaseAuthStore";
 import { useWalletAuthSync } from "./hooks/useWalletAuthSync";
 
 // Components
 import Navbar from "./components/navigation/Navbar";
+import Footer from "./components/navigation/Footer";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import SetupGuard from "./components/setup/SetupGuard";
 
@@ -22,6 +23,8 @@ import ProfilePage from "./pages/ProfilePage";
 import CreateProposalPage from "./pages/CreateProposalPage";
 import ProposalsPage from "./pages/ProposalsPage";
 import ProposalDetailPage from "./pages/ProposalDetailPage";
+import AboutPage from "./pages/AboutPage";
+import StatusPage from "./pages/StatusPage";
 
 // Placeholder page components
 const LandingPage = () => (
@@ -67,8 +70,8 @@ const NotFoundPage = () => (
 
 // Component with auth sync
 const AuthSyncWrapper = ({ children }: { children: React.ReactNode }) => {
-  useAuthSync(); // Existing auth sync
-  useWalletAuthSync(); // New wallet sync
+  useJWTAuthSync(); // JWT auth initialization
+  useWalletAuthSync(); // Wallet state sync
   return <>{children}</>;
 };
 
@@ -79,78 +82,86 @@ function App() {
         <RainbowKitProvider>
           <AuthSyncWrapper>
             <Router>
-              {/* Navbar appears on every page */}
-              <Navbar />
+              {/* Flex container for sticky footer */}
+              <div className="flex flex-col min-h-screen">
+                {/* Navbar appears on every page */}
+                <Navbar />
 
-              {/* Main content with padding to account for fixed navbar */}
-              <main className="container mx-auto px-4 pt-20">
-                <Routes>
-                  {/* Public route - accessible to everyone */}
-                  <Route path="/" element={<LandingPage />} />
+                {/* Main content with flex-1 to expand and push footer down */}
+                <main className="container mx-auto px-4 pt-20 flex-1">
+                  <Routes>
+                    {/* Public routes - accessible to everyone */}
+                    <Route path="/" element={<LandingPage />} />
+                    <Route path="/about" element={<AboutPage />} />
+                    <Route path="/status" element={<StatusPage />} />
 
-                  {/* Setup route - authenticated users only, before profile creation */}
-                  <Route
-                    path="/setup"
-                    element={
-                      <SetupGuard>
-                        <SetupPage />
-                      </SetupGuard>
-                    }
-                  />
+                    {/* Setup route - authenticated users only, before profile creation */}
+                    <Route
+                      path="/setup"
+                      element={
+                        <SetupGuard>
+                          <SetupPage />
+                        </SetupGuard>
+                      }
+                    />
 
-                  {/* Protected routes - require authentication */}
-                  <Route
-                    path="/proposals"
-                    element={
-                      <ProtectedRoute>
-                        <ProposalsPage />
-                      </ProtectedRoute>
-                    }
-                  />
+                    {/* Protected routes - require authentication + completed profile */}
+                    <Route
+                      path="/proposals"
+                      element={
+                        <ProtectedRoute>
+                          <ProposalsPage />
+                        </ProtectedRoute>
+                      }
+                    />
 
-                  {/* Individual proposal route */}
-                  <Route
-                    path="/proposal/:id"
-                    element={
-                      <ProtectedRoute>
-                        <ProposalDetailPage />
-                      </ProtectedRoute>
-                    }
-                  />
+                    {/* Individual proposal route */}
+                    <Route
+                      path="/proposal/:id"
+                      element={
+                        <ProtectedRoute>
+                          <ProposalDetailPage />
+                        </ProtectedRoute>
+                      }
+                    />
 
-                  <Route
-                    path="/categories"
-                    element={
-                      <ProtectedRoute>
-                        <CategoriesPage />
-                      </ProtectedRoute>
-                    }
-                  />
+                    <Route
+                      path="/categories"
+                      element={
+                        <ProtectedRoute>
+                          <CategoriesPage />
+                        </ProtectedRoute>
+                      }
+                    />
 
-                  {/* Profile route */}
-                  <Route
-                    path="/profile"
-                    element={
-                      <ProtectedRoute>
-                        <ProfilePage />
-                      </ProtectedRoute>
-                    }
-                  />
+                    {/* Profile route */}
+                    <Route
+                      path="/profile"
+                      element={
+                        <ProtectedRoute>
+                          <ProfilePage />
+                        </ProtectedRoute>
+                      }
+                    />
 
-                  {/* Create Proposal route */}
-                  <Route
-                    path="/create-proposal"
-                    element={
-                      <ProtectedRoute>
-                        <CreateProposalPage />
-                      </ProtectedRoute>
-                    }
-                  />
+                    {/* Create Proposal route */}
+                    <Route
+                      path="/create-proposal"
+                      element={
+                        <ProtectedRoute>
+                          <CreateProposalPage />
+                        </ProtectedRoute>
+                      }
+                    />
 
-                  {/* 404 Not Found route */}
-                  <Route path="*" element={<NotFoundPage />} />
-                </Routes>
-              </main>
+                    {/* 404 Not Found route */}
+                    <Route path="*" element={<NotFoundPage />} />
+                  </Routes>
+                </main>
+
+                {/* Footer appears on every page and sticks to bottom */}
+                <Footer />
+              </div>
             </Router>
           </AuthSyncWrapper>
         </RainbowKitProvider>

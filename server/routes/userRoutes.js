@@ -1,68 +1,15 @@
 import express from 'express';
 import { userDb, organizationDb } from '../database/supabase.js';
+import { requireJwtAuth, optionalJwtAuth } from '../middleware/jwtAuth.js';
 
 const router = express.Router();
-
-// ================ HELPER FUNCTIONS ================
-
-/**
- * Get session from Redis (reuse from server.js logic)
- */
-const getSession = async (redis, sessionToken) => {
-  try {
-    const sessionData = await redis.get(`session:${sessionToken}`);
-    return sessionData ? JSON.parse(sessionData) : null;
-  } catch (error) {
-    console.error('Failed to get session:', error);
-    return null;
-  }
-};
-
-/**
- * Middleware to verify authentication via Redis session
- */
-const requireAuth = (redis) => {
-  return async (req, res, next) => {
-    try {
-      const sessionToken = req.cookies.auth_token;
-      
-      if (!sessionToken) {
-        return res.status(401).json({ 
-          error: 'Authentication required',
-          authenticated: false 
-        });
-      }
-      
-      const sessionData = await getSession(redis, sessionToken);
-      
-      if (!sessionData) {
-        res.clearCookie('auth_token');
-        return res.status(401).json({ 
-          error: 'Invalid or expired session',
-          authenticated: false 
-        });
-      }
-      
-      // Add session data to request for use in routes
-      req.session = sessionData;
-      req.walletAddress = sessionData.address;
-      next();
-      
-    } catch (error) {
-      console.error('Auth middleware error:', error);
-      res.status(500).json({ error: 'Authentication check failed' });
-    }
-  };
-};
 
 // ================ ROUTE FACTORY ================
 
 /**
- * Create user routes with Redis instance
+ * Create user routes (using JWT authentication)
  */
-export const createUserRoutes = (redis) => {
-  // Auth middleware for this router
-  const authRequired = requireAuth(redis);
+export const createUserRoutes = () => {
   
   // ================ PUBLIC ENDPOINTS ================
   
@@ -193,15 +140,16 @@ export const createUserRoutes = (redis) => {
     }
   });
   
-  // ================ PROTECTED ENDPOINTS ================
+  // ================ PROTECTED ENDPOINTS (JWT REQUIRED) ================
   
   /**
    * Get current user profile
    * GET /api/user/profile
-   * Requires authentication
+   * Requires JWT authentication
    */
-  router.get('/profile', authRequired, async (req, res) => {
+  router.get('/profile', requireJwtAuth, async (req, res) => {
     try {
+      // req.walletAddress comes from JWT middleware
       const user = await userDb.getByWallet(req.walletAddress);
       
       if (!user) {
@@ -227,9 +175,9 @@ export const createUserRoutes = (redis) => {
   /**
    * Create new user profile
    * POST /api/user/create
-   * Requires authentication
+   * Uses optional JWT auth - can be called during setup flow
    */
-  router.post('/create', authRequired, async (req, res) => {
+  router.post('/create', optionalJwtAuth, async (req, res) => {
     try {
       const { unique_id, first_name, last_name, organization_id } = req.body;
       
@@ -248,8 +196,22 @@ export const createUserRoutes = (redis) => {
         });
       }
       
+      // For user creation, need wallet address from JWT or request body
+      let walletAddress = req.walletAddress; // From JWT if authenticated
+      
+      if (!walletAddress) {
+        // If no JWT, wallet address should be in request body or headers
+        walletAddress = req.body.wallet_address;
+        
+        if (!walletAddress) {
+          return res.status(400).json({ 
+            error: 'Wallet address is required for user creation' 
+          });
+        }
+      }
+      
       // Check if user already exists
-      const userExists = await userDb.exists(req.walletAddress);
+      const userExists = await userDb.exists(walletAddress);
       if (userExists) {
         return res.status(409).json({ 
           error: 'User profile already exists for this wallet address' 
@@ -276,7 +238,7 @@ export const createUserRoutes = (redis) => {
       
       // Create user
       const userData = {
-        walletAddress: req.walletAddress,
+        walletAddress: walletAddress,
         uniqueId: unique_id,
         firstName: first_name,
         lastName: last_name,

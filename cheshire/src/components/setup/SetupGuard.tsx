@@ -1,25 +1,29 @@
 import { Navigate } from "react-router-dom";
-import { useAuthStore } from "../../store/authStore";
+import { useSupabaseAuthStore } from "../../store/supabaseAuthStore";
+import { useAccount } from "wagmi";
 
 interface SetupGuardProps {
   children: React.ReactNode;
 }
 
 const SetupGuard = ({ children }: SetupGuardProps) => {
+  const { isConnected, address } = useAccount();
   const { isAuthenticated, isAuthenticating, userExists, isCheckingUser } =
-    useAuthStore();
+    useSupabaseAuthStore();
 
-  // Debug logging to see what's happening
+  // Debug logging
   console.log("🔍 SetupGuard state:", {
+    isConnected,
+    address,
     isAuthenticated,
     isAuthenticating,
     userExists,
     isCheckingUser,
   });
 
-  // Show loading while checking authentication or user existence
-  if (isAuthenticating || isCheckingUser) {
-    console.log("⏳ SetupGuard - Loading auth/user state...");
+  // Show loading while checking user status
+  if (isCheckingUser || isAuthenticating) {
+    console.log("⏳ SetupGuard - Loading user/auth state...");
     return (
       <div className="flex justify-center items-center min-h-[70vh]">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-400"></div>
@@ -27,22 +31,28 @@ const SetupGuard = ({ children }: SetupGuardProps) => {
     );
   }
 
-  // Not authenticated → redirect to home
-  if (!isAuthenticated) {
-    console.log("❌ SetupGuard - Not authenticated");
+  // Wallet not connected → redirect to home
+  if (!isConnected || !address) {
+    console.log("❌ SetupGuard - Wallet not connected");
     return <Navigate to="/" replace />;
   }
 
-  // User already exists → redirect to profile (setup already completed)
-  if (userExists) {
-    console.log("↩️ SetupGuard - User already exists, redirecting to profile");
-    return <Navigate to="/profile" replace />;
+  // User already authenticated → redirect to main app
+  if (isAuthenticated && userExists) {
+    console.log("↩️ SetupGuard - User already authenticated and has profile");
+    return <Navigate to="/proposals" replace />;
   }
 
-  // Authenticated but user doesn't exist → show setup page
-  console.log(
-    "✅ SetupGuard - Authenticated but user doesn't exist, showing setup page"
-  );
+  // User already exists but not authenticated → redirect to home for signin
+  if (userExists && !isAuthenticated) {
+    console.log(
+      "↩️ SetupGuard - User exists but not authenticated, redirect to signin"
+    );
+    return <Navigate to="/" replace />;
+  }
+
+  // Connected wallet + no user profile (or profile check in progress) → show setup page
+  console.log("✅ SetupGuard - Wallet connected, user needs setup");
   return <>{children}</>;
 };
 

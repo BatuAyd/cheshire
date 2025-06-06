@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccount } from "wagmi";
+import { apiFetch } from "../../utils/api";
+import { useSupabaseAuthStore } from "../../store/supabaseAuthStore";
 
 const UserSetupSimple = () => {
   const navigate = useNavigate();
@@ -167,25 +169,32 @@ const UserSetupSimple = () => {
     try {
       setSubmitting(true);
 
-      const response = await fetch("http://localhost:8080/api/user/create", {
+      // Prepare request body - include wallet address since we might not have JWT yet
+      const requestBody = {
+        ...formData,
+        wallet_address: address, // Include wallet address for user creation
+      };
+
+      const response = await apiFetch("http://localhost:8080/api/user/create", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(formData),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
 
       if (response.ok) {
         console.log("✅ User created:", data.user);
-        // Force auth store to refresh and mark user as existing
-        const { useAuthStore } = await import("../../store/authStore");
-        useAuthStore.getState().setUserExists(true); // Mark user as existing
-        useAuthStore.getState().checkAuthStatus(true); // Refresh auth status
-        // Redirect to profile
-        navigate("/profile", { replace: true });
+
+        // Update auth store to reflect user now exists
+        useSupabaseAuthStore.getState().setUserExists(true);
+
+        console.log("🔄 User profile created, redirecting to signin...");
+
+        // Redirect to home for sign in (user needs to authenticate to get JWT)
+        navigate("/", { replace: true });
+
+        // Show success message
+        alert("Profile created successfully! Please sign in to continue.");
       } else {
         alert("Error: " + data.error);
       }
@@ -333,7 +342,7 @@ const UserSetupSimple = () => {
               </p>
             </div>
 
-            {/* Organization - NOW REQUIRED */}
+            {/* Organization */}
             <div>
               <label className="block text-sm font-medium text-neutral-700 mb-2">
                 Organization ID *

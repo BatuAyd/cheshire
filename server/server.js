@@ -1,13 +1,13 @@
 import express from "express";
 import cors from "cors";
-import cookieParser from "cookie-parser";
-import { SiweMessage, generateNonce } from "siwe";
-import { createClient } from 'redis';
 import dotenv from 'dotenv';
+import { Redis } from '@upstash/redis';
 import { testConnection } from './database/supabase.js';
+import { createAuthRoutes } from './routes/authRoutes.js';
 import { createUserRoutes } from './routes/userRoutes.js';
 import { createProposalRoutes } from './routes/proposalRoutes.js';
-
+import { requireJwtAuth } from './middleware/jwtAuth.js';
+import { cleanupExpiredSessions } from './utils/supabaseAuth.js';
 
 // Load environment variables
 dotenv.config();
@@ -15,35 +15,30 @@ dotenv.config();
 // Initialize Express app
 const app = express();
 
+// Server start time
+const serverStartTime = Date.now();
+
 // ================ DATABASE AND REDIS SETUP ================
 
-const redis = createClient({
-  url: process.env.REDIS_URL || 'redis://localhost:6379',
-  password: process.env.REDIS_PASSWORD || undefined,
+// Create Upstash Redis connection for future voting system
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
-// Redis error handling
-redis.on('error', (err) => {
-  console.error('Redis Client Error:', err);
-  console.error('Cannot start server without Redis connection');
-  process.exit(1);
-});
-
-redis.on('connect', () => {
-  console.log('✅ Connected to Redis');
-});
-
-redis.on('ready', () => {
-  console.log('✅ Redis client ready');
-});
-
-// Connect to Redis
+// Test Upstash Redis connection
+let redisConnected = false;
 try {
-  await redis.connect();
+  const pingResult = await redis.ping();
+  if (pingResult === 'PONG') {
+    redisConnected = true;
+  } else {
+    console.log('⚠️ Upstash Redis responded but not with PONG');
+  }
 } catch (error) {
-  console.error('❌ Failed to connect to Redis:', error);
-  console.error('Make sure Redis is running: brew services start redis');
-  process.exit(1);
+  console.error('⚠️ Failed to connect to Upstash Redis:', error);
+  console.error('Redis will be needed for voting calculations, but server can start without it');
+  redisConnected = false;
 }
 
 // Test Supabase connection
@@ -51,13 +46,35 @@ try {
   const supabaseConnected = await testConnection();
   if (!supabaseConnected) {
     console.error('❌ Failed to connect to Supabase');
-    console.error('Check your SUPABASE_URL and SUPABASE_ANON_KEY in .env file');
+    console.error('Check your SUPABASE_URL and SUPABASE_SERVICE_KEY in .env file');
     process.exit(1);
   }
 } catch (error) {
   console.error('❌ Supabase connection error:', error);
   process.exit(1);
 }
+
+// Clean up expired sessions on start and periodically
+
+// Run cleanup immediately on server start
+(async () => {
+  try {
+    await cleanupExpiredSessions();
+    console.log('🧹 Initial cleanup completed on server start');
+  } catch (error) {
+    console.error('⚠️ Error in initial cleanup:', error);
+  }
+})();
+
+// Cleanup every 12 hours
+setInterval(async () => {
+  try {
+    await cleanupExpiredSessions();
+    console.log('✅ Periodic cleanup completed');
+  } catch (error) {
+    console.error('⚠️ Error in periodic cleanup:', error);
+  }
+}, 12 * 60 * 60 * 1000); // 12 hours
 
 // ================ MIDDLEWARE SETUP ================
 
@@ -69,219 +86,141 @@ app.use(cors({
 
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
-app.use(cookieParser());
-
-// ================ SESSION HELPERS ================
-
-const SESSION_TTL = parseInt(process.env.SESSION_TTL) || 129600; // 36 hours
-
-/**
- * Store session in Redis with TTL
- */
-const createSession = async (sessionToken, sessionData) => {
-  try {
-    await redis.setEx(
-      `session:${sessionToken}`, 
-      SESSION_TTL, 
-      JSON.stringify(sessionData)
-    );
-    return true;
-  } catch (error) {
-    console.error('Failed to create session:', error);
-    return false;
-  }
-};
-
-/**
- * Get session from Redis
- */
-const getSession = async (sessionToken) => {
-  try {
-    const sessionData = await redis.get(`session:${sessionToken}`);
-    return sessionData ? JSON.parse(sessionData) : null;
-  } catch (error) {
-    console.error('Failed to get session:', error);
-    return null;
-  }
-};
-
-/**
- * Delete session from Redis
- */
-const deleteSession = async (sessionToken) => {
-  try {
-    await redis.del(`session:${sessionToken}`);
-    return true;
-  } catch (error) {
-    console.error('Failed to delete session:', error);
-    return false;
-  }
-};
 
 // ================ API ENDPOINTS ================
 
 // Health check endpoint
 app.get("/", (req, res) => {
-  res.send("Authentication server with Redis is running");
+  res.json({
+    message: "Cheshire API Server with JWT Authentication",
+    version: "0.7.0",
+    auth: "JWT",
+    database: "Supabase PostgreSQL",
+    redis: "Upstash Redis (voting calculations)"
+  });
 });
 
-// Generate a nonce for message signing
-app.get("/api/nonce", (req, res) => {
+// JWT-based /api/me endpoint
+app.get("/api/me", requireJwtAuth, async (req, res) => {
   try {
-    const nonce = generateNonce();
-    console.log("Generated nonce for authentication");
-    res.status(200).json({ nonce });
-  } catch (error) {
-    console.error("Error generating nonce:", error);
-    res.status(500).json({ error: "Failed to generate nonce" });
-  }
-});
-
-// Get current user session
-app.get("/api/me", async (req, res) => {
-  try {
-    const sessionToken = req.cookies.auth_token;
-    
-    if (!sessionToken) {
-      return res.status(200).json({ authenticated: false });
-    }
-    
-    const sessionData = await getSession(sessionToken);
-    
-    if (!sessionData) {
-      // Session expired or doesn't exist
-      res.clearCookie('auth_token');
-      return res.status(200).json({ authenticated: false });
-    }
-    
-    return res.status(200).json({ 
+    res.status(200).json({ 
       authenticated: true, 
-      address: sessionData.address 
+      user: {
+        walletAddress: req.user.walletAddress
+      }
     });
   } catch (error) {
-    console.error("Error checking authentication:", error);
+    console.error("Error in /api/me:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// Verify signature and create session
-app.post("/api/verify", async (req, res) => {
-  const { message, signature } = req.body;
-  
-  if (!message || !signature) {
-    return res.status(400).json({ 
-      ok: false, 
-      error: "Missing message or signature" 
-    });
-  }
-  
-  try {
-    // Extract address from the message
-    const addressMatch = message.match(/Address: (0x[a-fA-F0-9]{40})/);
-    
-    if (!addressMatch || !addressMatch[1]) {
-      return res.status(400).json({ 
-        ok: false, 
-        error: "Invalid message format - could not extract address" 
-      });
-    }
-    
-    const address = addressMatch[1];
-    
-    // Create a session token
-    const sessionToken = generateNonce();
-    
-    // Store session data in Redis
-    const sessionData = { 
-      address,
-      issuedAt: new Date().toISOString()
-    };
-    
-    const sessionCreated = await createSession(sessionToken, sessionData);
-    
-    if (!sessionCreated) {
-      return res.status(500).json({ 
-        ok: false, 
-        error: "Failed to create session" 
-      });
-    }
-    
-    // Set session cookie
-    res.cookie('auth_token', sessionToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: SESSION_TTL * 1000 // Convert to milliseconds
-    });
-    
-    console.log(`✅ User authenticated: ${address}`);
-    
-    res.status(200).json({ 
-      ok: true,
-      address
-    });
-  } catch (error) {
-    console.error('Verification error:', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-// Logout endpoint
-app.post("/api/logout", async (req, res) => {
-  try {
-    const sessionToken = req.cookies.auth_token;
-    
-    if (sessionToken) {
-      await deleteSession(sessionToken);
-    }
-    
-    res.clearCookie('auth_token');
-    res.status(200).json({ ok: true });
-  } catch (error) {
-    console.error('Logout error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Debug endpoint to see Redis stats
+// Debug endpoint to see Upstash Redis status (for voting system)
 app.get("/api/debug/redis", async (req, res) => {
   try {
-    const info = await redis.info('memory');
-    const dbSize = await redis.dbSize();
+    // Test connection with ping
+    const pingResult = await redis.ping();
+    
+    if (pingResult !== 'PONG') {
+      return res.status(503).json({ 
+        connected: false,
+        message: "Upstash Redis not responding - needed for voting calculations",
+        provider: "Upstash Redis"
+      });
+    }
+    
+    // Get database size (number of keys)
+    const dbSize = await redis.dbsize();
     
     res.status(200).json({ 
-      connected: redis.isOpen,
+      connected: true,
       database_keys: dbSize,
-      memory_info: info
+      ping: pingResult,
+      purpose: "Ready for voting calculations",
+      provider: "Upstash Redis",
+      url: process.env.UPSTASH_REDIS_REST_URL || "Not configured"
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: error.message,
+      connected: false,
+      provider: "Upstash Redis"
+    });
   }
 });
 
-// ================ USER ROUTES ================
+// System status endpoint
+app.get("/api/status", async (req, res) => {
+  try {
+    // Test Supabase connection
+    const supabaseHealth = await testConnection();
+    
+    // Test Upstash Redis connection
+    let redisHealth = false;
+    try {
+      const pingResult = await redis.ping();
+      redisHealth = pingResult === 'PONG';
+    } catch (error) {
+      console.log('Upstash Redis health check failed:', error.message);
+    }
 
-// Create user routes with Redis instance
-const userRoutes = createUserRoutes(redis);
+    // Calculate uptime
+    const uptimeSeconds = Math.floor((Date.now() - serverStartTime) / 1000); // in seconds
+    const uptimeHours = Math.floor(uptimeSeconds / 3600);
+    const uptimeMinutes = Math.floor((uptimeSeconds % 3600) / 60);
+    const uptime = `${uptimeHours}h ${uptimeMinutes}m`;
+    
+    res.status(200).json({
+      status: "healthy",
+      timestamp: new Date().toISOString(),
+      uptime: uptime,
+      services: {
+        api: true,
+        supabase: supabaseHealth,
+        redis: {
+          connected: redisHealth,
+          purpose: "voting_calculations",
+          provider: "Upstash",
+          required: false
+        }
+      },
+      auth: "JWT",
+      version: "0.7.0"
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "unhealthy",
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// ================ ROUTE MOUNTING ================
+
+// Auth routes (JWT-based)
+const authRoutes = createAuthRoutes();
+app.use('/api/auth', authRoutes);
+
+// User routes (JWT-protected)
+const userRoutes = createUserRoutes();
 app.use('/api/user', userRoutes);
 
-// ================ PROPOSAL ROUTES ================
-
-// Create proposal routes with Redis instance
-const proposalRoutes = createProposalRoutes(redis);
+// Proposal routes (JWT-protected) 
+const proposalRoutes = createProposalRoutes();
 app.use('/api/proposals', proposalRoutes);
 
 // ================ GRACEFUL SHUTDOWN ================
 
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully...');
-  await redis.quit();
+  // No need to close Upstash connection - it's REST API based
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   console.log('SIGINT received, shutting down gracefully...');
-  await redis.quit();
+  // No need to close Upstash connection - it's REST API based
   process.exit(0);
 });
 
@@ -289,7 +228,9 @@ process.on('SIGINT', async () => {
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`⚙️ Authentication server running on port ${PORT}`);
+  console.log(`🚀 Cheshire API Server running on port ${PORT}`);
+  console.log(`🔐 Authentication: JWT with Supabase sessions`);
   console.log(`📡 CORS configured for: ${process.env.FRONTEND_URL || "http://localhost:5173"}`);
-  console.log(`⏰ Session TTL: ${SESSION_TTL} seconds (${SESSION_TTL/3600} hours)`);
+  console.log(`💾 Database: Supabase PostgreSQL`);
+  console.log(`⚡ Redis: ${redisConnected ? 'Upstash connected (voting ready)' : 'Upstash disconnected (voting unavailable)'}`);
 });
