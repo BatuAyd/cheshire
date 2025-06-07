@@ -214,7 +214,7 @@ const ProposalsPage: React.FC = () => {
           {organizationInfo?.can_create && (
             <button
               onClick={handleCreateProposal}
-              className="mt-4 sm:mt-0 inline-flex items-center px-6 py-3 bg-orange-400 text-white rounded-lg font-medium transition-all hover:bg-orange-500 hover:shadow-md active:scale-95 gap-2"
+              className="mt-4 sm:mt-0 inline-flex items-center px-6 py-3 bg-orange-400 text-white rounded-lg font-medium transition-all hover:bg-orange-500 hover:shadow-md active:scale-95 gap-2 cursor-pointer"
             >
               <svg
                 className="w-5 h-5"

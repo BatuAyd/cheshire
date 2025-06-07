@@ -25,30 +25,7 @@ import ProposalsPage from "./pages/ProposalsPage";
 import ProposalDetailPage from "./pages/ProposalDetailPage";
 import AboutPage from "./pages/AboutPage";
 import StatusPage from "./pages/StatusPage";
-
-// Placeholder page components
-const LandingPage = () => (
-  <div>
-    <h1 className="text-3xl font-bold mb-4">Welcome to Cheshire</h1>
-    <p className="mb-4">
-      This is the public landing page that anyone can access.
-    </p>
-    <p>Connect your wallet and sign in to access the full application.</p>
-
-    <div className="mt-8 p-4 bg-blue-50 rounded-lg">
-      <h2 className="text-xl font-semibold text-blue-700 mb-2">
-        Getting Started
-      </h2>
-      <ol className="list-decimal ml-6 space-y-2 text-blue-800">
-        <li>Click the "Connect" button in the top right</li>
-        <li>Select your wallet (MetaMask, Coinbase Wallet, etc.)</li>
-        <li>After connecting, click the "Sign In" button</li>
-        <li>Sign the authentication message in your wallet</li>
-        <li>Once authenticated, you'll have access to protected pages</li>
-      </ol>
-    </div>
-  </div>
-);
+import LandingPage from "./pages/LandingPage";
 
 const CategoriesPage = () => (
   <div>

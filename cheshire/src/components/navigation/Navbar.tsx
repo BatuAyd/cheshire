@@ -181,7 +181,7 @@ const Navbar = () => {
                       {/* Sign Out Button */}
                       <button
                         onClick={handleSignOut}
-                        className="px-4 py-2 rounded-lg bg-neutral-200 text-neutral-700 font-medium transition-all hover:bg-neutral-300 active:scale-95 flex items-center gap-2"
+                        className="px-4 py-2 rounded-lg bg-neutral-200 text-neutral-700 font-medium transition-all hover:bg-neutral-300 active:scale-95 flex items-center gap-2 cursor-pointer"
                       >
                         <span>Sign Out</span>
                         <svg
