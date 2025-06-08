@@ -1,13 +1,13 @@
 # Cheshire Liquid Voting App
 
-A liquid voting platform with user profiles, JWT authentication, and proposal creation system, built with React, TypeScript, Express, Upstash Redis, and PostgreSQL.
+A liquid voting platform with user profiles, JWT authentication, categories system, and proposal suggestions, built with React, TypeScript, Express, Upstash Redis, and PostgreSQL.
 
 ## Architecture Overview
 
 - **Frontend**: React + TypeScript + Vite + TailwindCSS + Wagmi + RainbowKit
 - **Backend**: Express.js + Redis (Upstash recommended, local Redis alternative) + PostgreSQL (user data)
 - **Authentication**: JWT-based with wallet signing (SIWE pattern)
-- **Database**: PostgreSQL for user profiles, organizations, proposals, and JWT sessions (Supabase recommended)
+- **Database**: PostgreSQL for user profiles, organizations, proposals, categories, and JWT sessions (Supabase recommended)
 - **Session Management**: JWT tokens with 36-hour expiration stored in PostgreSQL
 
 ## Features
@@ -19,7 +19,11 @@ A liquid voting platform with user profiles, JWT authentication, and proposal cr
 - **Real-time Validation** - Unique ID and organization validation
 - **Organization Support** - Associate users with organizations
 - **Proposal Creation** - Create proposals with voting options and deadlines
-- **Proposal Management** - Organization-scoped proposal system with validation
+- **Proposal Management** - Organization scoped proposal system with validation
+- **Categories System** - Create and follow expertise categories for voting guidance
+- **Category Following** - Follow trusted experts and their categories
+- **Suggestion System** - Category creators can provide voting or delegation suggestions
+- **Liquid Democracy Foundation** - Framework for direct voting or expert delegation
 - **Redis Integration** - Redis ready for future voting calculations (Upstash or local)
 
 ## Quick Setup
@@ -165,13 +169,80 @@ CREATE TABLE proposal_options (
 CREATE INDEX idx_proposal_options_proposal_id ON proposal_options(proposal_id);
 ```
 
+**Categories Table:**
+
+```sql
+CREATE TABLE categories (
+  category_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL CHECK (length(trim(title)) >= 5 AND length(trim(title)) <= 30),
+  description TEXT NOT NULL CHECK (length(trim(description)) >= 50 AND length(trim(description)) <= 1000),
+  organization_id TEXT NOT NULL REFERENCES organizations(organization_id),
+  created_by TEXT NOT NULL REFERENCES users(wallet_address),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  -- Unique category titles per organization
+  UNIQUE(organization_id, title)
+);
+
+-- Create indexes for performance
+CREATE INDEX idx_categories_organization_id ON categories(organization_id);
+CREATE INDEX idx_categories_creator_wallet ON categories(created_by);
+```
+
+**Category Followers Table:**
+
+```sql
+CREATE TABLE category_followers (
+  category_id UUID NOT NULL REFERENCES categories(category_id) ON DELETE CASCADE,
+  follower_wallet TEXT NOT NULL REFERENCES users(wallet_address) ON DELETE CASCADE,
+  followed_at TIMESTAMPTZ DEFAULT NOW(),
+
+  PRIMARY KEY (category_id, follower_wallet)
+);
+
+-- Create indexes for performance
+CREATE INDEX idx_category_followers_category_id ON category_followers(category_id);
+CREATE INDEX idx_category_followers_follower_wallet ON category_followers(follower_wallet);
+```
+
+**Category Suggestions Table:**
+
+```sql
+CREATE TABLE category_suggestions (
+  suggestion_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  category_id UUID NOT NULL REFERENCES categories(category_id) ON DELETE CASCADE,
+  proposal_id UUID NOT NULL REFERENCES proposals(proposal_id) ON DELETE CASCADE,
+  suggestion_type TEXT NOT NULL CHECK (suggestion_type = ANY (ARRAY['delegate', 'vote_option'])),
+  target_user TEXT REFERENCES users(unique_id),
+  target_option_number INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  -- Business logic constraints
+  CONSTRAINT category_suggestions_check CHECK (
+    (suggestion_type = 'vote_option' AND target_user IS NULL AND target_option_number IS NOT NULL AND target_option_number > 0)
+    OR 
+    (suggestion_type = 'delegate' AND target_user IS NOT NULL AND target_option_number IS NULL)
+  ),
+
+  -- One suggestion per category per proposal
+  UNIQUE(category_id, proposal_id),
+
+  -- Foreign key to proposal options for vote suggestions
+  FOREIGN KEY (proposal_id, target_option_number) REFERENCES proposal_options(proposal_id, option_number)
+);
+
+-- Create indexes for performance
+CREATE INDEX idx_category_suggestions_category_id ON category_suggestions(category_id);
+CREATE INDEX idx_category_suggestions_proposal_id ON category_suggestions(proposal_id);
+```
+
 4. Get Supabase credentials:
    - Go to **Settings** → **API**
    - Copy Project URL and service_role key
 
 #### Alternative: Local PostgreSQL
 
-You can use any PostgreSQL database instead of Supabase. Just update the connection details in your environment variables and modify `database/supabase.js` to use a standard PostgreSQL client.
+Any PostgreSQL database can be used instead of Supabase. Update the connection details in environment variables and modify `database/supabase.js` to use a standard PostgreSQL client.
 
 ### 4. Environment Variables
 
@@ -231,13 +302,26 @@ The app will be available at:
 1. **Connect Wallet** - Connect MetaMask or other wallet
 2. **Complete Setup** - Fill out profile form (one-time only)
 3. **Sign In** - Sign message to get JWT token
-4. **Access App** - Full access to proposals and proposal creation
+4. **Access App** - Full access to proposals, categories, and suggestion creation
 
 ### Existing Users
 
 1. **Connect Wallet** - Connect same wallet as before
 2. **Sign In** - Authenticate to get fresh JWT token
 3. **Immediate Access** - Direct access to app features
+
+### Category Expert Workflow
+
+1. **Create Category** - Define expertise area with title and description
+2. **Create Suggestions** - Provide voting or delegation recommendations on proposals
+3. **Build Following** - Gain followers interested in the expertise area
+
+### Category Follower Workflow
+
+1. **Browse Categories** - Explore available expertise categories
+2. **Follow Categories** - Subscribe to trusted experts
+3. **View Suggestions** - See recommendations on proposal detail pages
+4. **Apply Suggestions** - Use expert guidance for voting decisions (future feature)
 
 ### Protected Routes
 
@@ -265,6 +349,7 @@ The app will be available at:
 - `GET /api/user/unique-id/check?id=...` - Check unique ID availability
 - `GET /api/user/organization/check?id=...` - Check organization exists
 - `GET /api/user/organizations` - List all organizations
+- `GET /api/user/organization/users` - List organization members (JWT required)
 
 ### Proposal Management (JWT required)
 
@@ -273,6 +358,16 @@ The app will be available at:
 - `GET /api/proposals/organization` - Get organization's proposals
 - `GET /api/proposals/can-create` - Check if user can create proposals
 - `GET /api/proposals/:id` - Get proposal by ID
+- `GET /api/proposals/:id/suggestions` - Get suggestions for proposal from followed categories
+
+### Category Management (JWT required)
+
+- `GET /api/categories/organization` - List organization categories with pagination
+- `POST /api/categories/create` - Create new category
+- `GET /api/categories/:id` - Get category details
+- `POST /api/categories/:id/follow` - Follow a category
+- `DELETE /api/categories/:id/follow` - Unfollow a category
+- `POST /api/categories/:id/suggest` - Create suggestion for a proposal
 
 ### System Status
 
@@ -288,16 +383,44 @@ The app will be available at:
 
 ## Development Notes
 
+### Data Immutability
 - User profile data is **immutable** after creation
 - Proposals are **immutable** after creation (no editing allowed)
-- JWT tokens expire after 36 hours and are stored in Supabase for validation
+- Categories are **immutable** after creation
+- Suggestions are **immutable** after creation
+
+### Authentication System
+- JWT tokens expire after 36 hours and are stored in PostgreSQL for validation
 - Expired JWT sessions are automatically cleaned up every 12 hours
 - All protected routes require valid JWT tokens via Authorization headers
 - PostgreSQL database can be local, cloud-hosted, or Supabase
 - When using Supabase, the service_role key bypasses Row Level Security for server operations
 - JWT authentication uses SUPABASE_SERVICE_KEY as the signing secret when using Supabase
-- Proposals are organization-scoped (users can only create proposals for their organization)
+
+### Business Logic Constraints
+- Proposals are organization scoped (users can only create proposals for their organization)
+- Categories are organization scoped (users can only view and follow categories from their organization)
 - Voting deadlines must be at least 1 hour from creation time
+- Suggestions cannot be created within 1 hour of proposal voting deadline
+- One suggestion per category per proposal (enforced at database level)
+- Category titles must be unique within each organization
+
+### Performance Considerations
 - Redis is used for voting calculations, not authentication (which uses JWT tokens)
 - Local Redis or Upstash Redis can be used depending on deployment preference
+- Database indexes optimize common query patterns for proposals, categories, and suggestions
+- Foreign key constraints ensure referential integrity across all tables
+- Check constraints enforce business rules at the database level
+
+### State Management
 - Wallet address changes automatically clear auth state and redirect to clean connection
+- Category follow states update in real time across components
+- Search and pagination state persists via URL parameters
+- Authentication state is managed through Zustand store with JWT persistence
+
+### Liquid Democracy Foundation
+- Categories system provides the framework for expertise-based delegation
+- Suggestion system enables expert guidance without forced delegation
+- Future voting system will integrate with suggestion recommendations
+- Direct voting and delegation options will be available on proposal pages
+- Redis backend is prepared for complex vote counting and delegation calculations
