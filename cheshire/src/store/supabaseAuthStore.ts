@@ -9,6 +9,7 @@ interface AuthState {
   // State
   isAuthenticated: boolean;
   isAuthenticating: boolean;
+  isInitializing: boolean;
   userAddress: string | null;
   userExists: boolean;
   isCheckingUser: boolean;
@@ -91,6 +92,7 @@ export const useSupabaseAuthStore = create<AuthState>((set, get) => ({
   // Initial state
   isAuthenticated: false,
   isAuthenticating: false,
+  isInitializing: true, // NEW: Start as true, will be set to false after initialization
   userAddress: null,
   userExists: false,
   isCheckingUser: false,
@@ -221,7 +223,8 @@ export const useSupabaseAuthStore = create<AuthState>((set, get) => ({
       userAddress: null,
       userExists: false,
       jwtToken: null,
-      serverError: false
+      serverError: false,
+      isInitializing: false,
     });
     
     console.log('✅ Logged out successfully');
@@ -232,6 +235,7 @@ export const useSupabaseAuthStore = create<AuthState>((set, get) => ({
    */
   initializeAuth: () => {
     console.log('🚀 Initializing JWT auth');
+    set({ isInitializing: true });
     
     const storedToken = getStoredToken();
     
@@ -241,7 +245,8 @@ export const useSupabaseAuthStore = create<AuthState>((set, get) => ({
         isAuthenticated: false,
         userAddress: null,
         userExists: false,
-        jwtToken: null 
+        jwtToken: null, 
+        isInitializing: false
       });
       return;
     }
@@ -254,7 +259,8 @@ export const useSupabaseAuthStore = create<AuthState>((set, get) => ({
         isAuthenticated: false,
         userAddress: null,
         userExists: false,
-        jwtToken: null 
+        jwtToken: null,
+        isInitializing: false
       });
       return;
     }
@@ -267,7 +273,8 @@ export const useSupabaseAuthStore = create<AuthState>((set, get) => ({
         isAuthenticated: true,
         userAddress: decoded.wallet_address,
         userExists: true, // If they have a JWT, they must have completed setup
-        jwtToken: storedToken
+        jwtToken: storedToken,
+        isInitializing: false
       });
     } else {
       console.log('❌ Invalid JWT token format');
@@ -276,7 +283,8 @@ export const useSupabaseAuthStore = create<AuthState>((set, get) => ({
         isAuthenticated: false,
         userAddress: null,
         userExists: false,
-        jwtToken: null 
+        jwtToken: null,
+        isInitializing: false
       });
     }
   },

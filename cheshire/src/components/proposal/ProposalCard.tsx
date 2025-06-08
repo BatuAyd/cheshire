@@ -103,7 +103,7 @@ const ProposalCard: React.FC<ProposalCardProps> = ({
       </div>
 
       {/* Description */}
-      <p className="text-neutral-600 text-sm leading-relaxed mb-4">
+      <p className="text-neutral-600 text-sm leading-relaxed mb-4 break-words">
         <TextHighlighter
           text={truncatedDescription}
           searchQuery={searchQuery}

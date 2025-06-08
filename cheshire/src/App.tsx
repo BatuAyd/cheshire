@@ -23,20 +23,10 @@ import ProfilePage from "./pages/ProfilePage";
 import CreateProposalPage from "./pages/CreateProposalPage";
 import ProposalsPage from "./pages/ProposalsPage";
 import ProposalDetailPage from "./pages/ProposalDetailPage";
+import CategoriesPage from "./pages/CategoriesPage";
 import AboutPage from "./pages/AboutPage";
 import StatusPage from "./pages/StatusPage";
 import LandingPage from "./pages/LandingPage";
-
-const CategoriesPage = () => (
-  <div>
-    <h1 className="text-3xl font-bold mb-4">Categories</h1>
-    <p className="mb-4">This is a protected page for viewing categories.</p>
-    <div className="p-4 bg-green-50 border border-green-200 rounded-md mb-4">
-      <p className="text-green-800">You are successfully authenticated! 🎉</p>
-    </div>
-    <p>This page would list all available categories for proposals.</p>
-  </div>
-);
 
 const NotFoundPage = () => (
   <div>

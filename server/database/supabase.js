@@ -137,6 +137,26 @@ export const userDb = {
       console.error('Error creating user:', error);
       throw error;
     }
+  },
+
+  // Get users by organization
+  async getByOrganization(organizationId) {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('unique_id, first_name, last_name')
+        .eq('organization_id', organizationId.toLowerCase())
+        .order('first_name');
+        
+      if (error) {
+        throw error;
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('Error getting users by organization:', error);
+      throw error;
+    }
   }
 };
 
@@ -414,6 +434,284 @@ export const proposalDb = {
       return !!data?.organization_id;
     } catch (error) {
       console.error('Error checking if user can create proposal:', error);
+      throw error;
+    }
+  }
+};
+
+// Category database functions
+export const categoryDb = {
+  // Get category by ID
+  async getById(categoryId) {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select(`
+          category_id,
+          title,
+          description,
+          organization_id,
+          created_by,
+          created_at,
+          organizations (
+            organization_name
+          ),
+          users!categories_created_by_fkey (
+            unique_id,
+            first_name,
+            last_name
+          )
+        `)
+        .eq('category_id', categoryId)
+        .single();
+        
+      if (error) {
+        throw error;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error getting category by ID:', error);
+      throw error;
+    }
+  },
+
+  // Get categories by organization with pagination
+  async getByOrganization(organizationId, limit = 50, offset = 0) {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select(`
+          category_id,
+          title,
+          description,
+          organization_id,
+          created_by,
+          created_at,
+          organizations (
+            organization_name
+          ),
+          users!categories_created_by_fkey (
+            unique_id,
+            first_name,
+            last_name
+          )
+        `)
+        .eq('organization_id', organizationId.toLowerCase())
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+        
+      if (error) {
+        throw error;
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('Error getting categories by organization:', error);
+      throw error;
+    }
+  },
+
+  // Create new category
+  async create(categoryData) {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .insert([{
+          title: categoryData.title.trim(),
+          description: categoryData.description.trim(),
+          organization_id: categoryData.organizationId.toLowerCase(),
+          created_by: categoryData.createdBy.toLowerCase()
+        }])
+        .select(`
+          category_id,
+          title,
+          description,
+          organization_id,
+          created_by,
+          created_at,
+          organizations (
+            organization_name
+          ),
+          users!categories_created_by_fkey (
+            unique_id,
+            first_name,
+            last_name
+          )
+        `)
+        .single();
+        
+      if (error) {
+        throw error;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error creating category:', error);
+      throw error;
+    }
+  },
+
+  // Follow a category
+  async follow(categoryId, followerWallet) {
+    try {
+      const { data, error } = await supabase
+        .from('category_followers')
+        .insert([{
+          category_id: categoryId,
+          follower_wallet: followerWallet.toLowerCase()
+        }])
+        .select()
+        .single();
+        
+      if (error) {
+        throw error;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error following category:', error);
+      throw error;
+    }
+  },
+
+  // Unfollow a category
+  async unfollow(categoryId, followerWallet) {
+    try {
+      const { error } = await supabase
+        .from('category_followers')
+        .delete()
+        .eq('category_id', categoryId)
+        .eq('follower_wallet', followerWallet.toLowerCase());
+        
+      if (error) {
+        throw error;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error unfollowing category:', error);
+      throw error;
+    }
+  },
+
+  // Check if user is following a category
+  async isFollowing(categoryId, followerWallet) {
+    try {
+      const { data, error } = await supabase
+        .from('category_followers')
+        .select('category_id')
+        .eq('category_id', categoryId)
+        .eq('follower_wallet', followerWallet.toLowerCase())
+        .single();
+        
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+        throw error;
+      }
+      
+      return !!data;
+    } catch (error) {
+      console.error('Error checking if following category:', error);
+      throw error;
+    }
+  },
+
+  // Get follower count for a category
+  async getFollowerCount(categoryId) {
+    try {
+      const { count, error } = await supabase
+        .from('category_followers')
+        .select('*', { count: 'exact', head: true })
+        .eq('category_id', categoryId);
+        
+      if (error) {
+        throw error;
+      }
+      
+      return count || 0;
+    } catch (error) {
+      console.error('Error getting follower count:', error);
+      throw error;
+    }
+  },
+
+  // Create suggestion for a proposal
+  async createSuggestion(suggestionData) {
+    try {
+      const { data, error } = await supabase
+        .from('category_suggestions')
+        .insert([{
+          category_id: suggestionData.categoryId,
+          proposal_id: suggestionData.proposalId,
+          suggestion_type: suggestionData.suggestionType, // Now expects 'delegate' or 'vote_option'
+          target_user: suggestionData.targetUser || null,
+          target_option_number: suggestionData.targetOptionNumber || null
+        }])
+        .select()
+        .single();
+        
+      if (error) {
+        throw error;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Error creating category suggestion:', error);
+      throw error;
+    }
+  },
+
+  // Get suggestions for a proposal from categories user follows
+  async getSuggestionsForProposal(proposalId, userWallet) {
+    try {
+      // First, get the category IDs that the user follows
+      const { data: followedCategories, error: followError } = await supabase
+        .from('category_followers')
+        .select('category_id')
+        .eq('follower_wallet', userWallet.toLowerCase());
+        
+      if (followError) {
+        throw followError;
+      }
+      
+      // If user doesn't follow any categories, return empty array
+      if (!followedCategories || followedCategories.length === 0) {
+        return [];
+      }
+      
+      // Extract category IDs into an array
+      const categoryIds = followedCategories.map(fc => fc.category_id);
+      
+      // Now get suggestions for this proposal from those categories
+      // Note: target_user now stores unique_id, so we join on unique_id
+      const { data, error } = await supabase
+        .from('category_suggestions')
+        .select(`
+          suggestion_id,
+          suggestion_type,
+          target_option_number,
+          target_user,
+          created_at,
+          categories (
+            category_id,
+            title
+          ),
+          users!category_suggestions_target_user_fkey (
+            unique_id,
+            first_name,
+            last_name
+          )
+        `)
+        .eq('proposal_id', proposalId)
+        .in('category_id', categoryIds);
+        
+      if (error) {
+        throw error;
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('Error getting suggestions for proposal:', error);
       throw error;
     }
   }

@@ -1,5 +1,5 @@
 import express from 'express';
-import { userDb, organizationDb } from '../database/supabase.js';
+import { userDb, organizationDb, supabase } from '../database/supabase.js';
 import { requireJwtAuth, optionalJwtAuth } from '../middleware/jwtAuth.js';
 
 const router = express.Router();
@@ -277,6 +277,45 @@ export const createUserRoutes = () => {
       });
     }
   });
+
+  /**
+ * Get organization users for delegate suggestions
+ * GET /api/user/organization/users
+ * Requires JWT authentication
+ */
+router.get('/organization/users', requireJwtAuth, async (req, res) => {
+  try {
+    // Get user's organization
+    const user = await userDb.getByWallet(req.walletAddress);
+    if (!user || !user.organization_id) {
+      return res.status(403).json({ 
+        error: 'You must be part of an organization to view users' 
+      });
+    }
+    
+    // Get all users in the same organization
+    const { data, error } = await supabase
+      .from('users')
+      .select('unique_id, first_name, last_name')
+      .eq('organization_id', user.organization_id)
+      .order('first_name');
+      
+    if (error) {
+      throw error;
+    }
+    
+    res.status(200).json({ 
+      users: data || [],
+      organization_id: user.organization_id
+    });
+    
+  } catch (error) {
+    console.error('Error getting organization users:', error);
+    res.status(500).json({ 
+      error: 'Failed to get organization users' 
+    });
+  }
+});
   
   return router;
 };

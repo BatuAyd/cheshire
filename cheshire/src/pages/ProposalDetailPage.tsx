@@ -2,7 +2,31 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiFetch } from "../utils/api";
 import { getProposalStatus } from "../utils/proposalUtils";
+import SuggestionDisplay from "../components/suggestion/SuggestionDisplay";
+import SuggestionForm from "../components/suggestion/SuggestionForm";
 import type { Proposal } from "../utils/proposalUtils";
+
+// Types for suggestions
+interface Suggestion {
+  suggestion_id: string;
+  suggestion_type: "delegate" | "vote_option";
+  target_option_number?: number;
+  target_user?: string;
+  created_at: string;
+  categories: {
+    category_id: string;
+    title: string;
+  };
+  users?: {
+    unique_id: string;
+    first_name: string;
+    last_name: string;
+  };
+  proposal_option?: {
+    option_number: number;
+    option_text: string;
+  };
+}
 
 // Loading component
 const ProposalDetailSkeleton = () => (
@@ -81,6 +105,14 @@ const getTimeRemaining = (voting_deadline: string) => {
   }
 };
 
+// Check if suggestions can still be created (1 hour before deadline)
+const canCreateSuggestions = (voting_deadline: string) => {
+  const now = new Date();
+  const deadline = new Date(voting_deadline);
+  const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+  return deadline > oneHourFromNow;
+};
+
 // Format creation date
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString("en-US", {
@@ -111,9 +143,12 @@ const ProposalDetailPage: React.FC = () => {
   const navigate = useNavigate();
 
   const [proposal, setProposal] = useState<Proposal | null>(null);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [error, setError] = useState<string>("");
   const [notFound, setNotFound] = useState(false);
+  const [showSuggestionForm, setShowSuggestionForm] = useState(false);
 
   // Load proposal data
   useEffect(() => {
@@ -129,7 +164,7 @@ const ProposalDetailPage: React.FC = () => {
         setError("");
 
         const response = await apiFetch(
-          "http://localhost:8080/api/user/profile"
+          `http://localhost:8080/api/proposals/${id}`
         );
 
         if (response.status === 404) {
@@ -152,8 +187,58 @@ const ProposalDetailPage: React.FC = () => {
     loadProposal();
   }, [id]);
 
+  // Load suggestions when proposal is loaded
+  useEffect(() => {
+    const loadSuggestions = async () => {
+      if (!proposal) return;
+
+      try {
+        setSuggestionsLoading(true);
+        const response = await apiFetch(
+          `http://localhost:8080/api/proposals/${proposal.proposal_id}/suggestions`
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          setSuggestions(data.suggestions || []);
+        } else {
+          console.warn("Could not load suggestions");
+          setSuggestions([]);
+        }
+      } catch (err) {
+        console.warn("Error loading suggestions:", err);
+        setSuggestions([]);
+      } finally {
+        setSuggestionsLoading(false);
+      }
+    };
+
+    loadSuggestions();
+  }, [proposal]);
+
   const handleGoBack = () => {
     navigate("/proposals");
+  };
+
+  const handleSuggestionCreated = () => {
+    setShowSuggestionForm(false);
+    // Reload suggestions
+    if (proposal) {
+      const loadSuggestions = async () => {
+        try {
+          const response = await apiFetch(
+            `http://localhost:8080/api/proposals/${proposal.proposal_id}/suggestions`
+          );
+          if (response.ok) {
+            const data = await response.json();
+            setSuggestions(data.suggestions || []);
+          }
+        } catch (err) {
+          console.warn("Error reloading suggestions:", err);
+        }
+      };
+      loadSuggestions();
+    }
   };
 
   // Loading state
@@ -276,6 +361,9 @@ const ProposalDetailPage: React.FC = () => {
 
   const status = getProposalStatus(proposal.voting_deadline);
   const timeRemaining = getTimeRemaining(proposal.voting_deadline);
+  const canCreateNewSuggestions = canCreateSuggestions(
+    proposal.voting_deadline
+  );
 
   return (
     <div className="min-h-[80vh] px-4 py-8">
@@ -393,34 +481,26 @@ const ProposalDetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Future Voting UI */}
+          {/* PHASE C: Suggestions Section - Replaces "Voting Interface Coming Soon" */}
           <div className="border-t border-neutral-200 pt-6 mt-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-6 h-6 text-blue-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-blue-800 mb-2">
-                Voting Interface Coming Soon
-              </h3>
-              <p className="text-blue-700">
-                The voting interface and results display will be implemented in
-                a future update.
-              </p>
-            </div>
+            <SuggestionDisplay
+              suggestions={suggestions}
+              loading={suggestionsLoading}
+              proposal={proposal}
+              canCreateSuggestions={canCreateNewSuggestions}
+              onCreateSuggestion={() => setShowSuggestionForm(true)}
+            />
           </div>
         </div>
+
+        {/* Suggestion Creation Form Modal */}
+        {showSuggestionForm && (
+          <SuggestionForm
+            proposal={proposal}
+            onClose={() => setShowSuggestionForm(false)}
+            onSuccess={handleSuggestionCreated}
+          />
+        )}
       </div>
     </div>
   );

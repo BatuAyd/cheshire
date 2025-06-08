@@ -1,5 +1,5 @@
 import express from 'express';
-import { proposalDb, userDb } from '../database/supabase.js';
+import { proposalDb, userDb, categoryDb } from '../database/supabase.js';
 import { requireJwtAuth } from '../middleware/jwtAuth.js';
 
 const router = express.Router();
@@ -318,6 +318,65 @@ export const createProposalRoutes = () => {
       console.error('Error getting proposal by ID:', error);
       res.status(500).json({ 
         error: 'Failed to get proposal' 
+      });
+    }
+  });
+  
+  /**
+   * NEW: Get suggestions for a proposal from user's followed categories
+   * GET /api/proposals/:id/suggestions
+   * Requires JWT authentication
+   * Phase C implementation
+   */
+  router.get('/:id/suggestions', requireJwtAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Validate UUID format
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!uuidPattern.test(id)) {
+        return res.status(400).json({ 
+          error: 'Invalid proposal ID format' 
+        });
+      }
+      
+      // Check if proposal exists and user has access to it
+      const proposal = await proposalDb.getById(id);
+      if (!proposal) {
+        return res.status(404).json({ 
+          error: 'Proposal not found' 
+        });
+      }
+      
+      // Check if user is in the same organization
+      const user = await userDb.getByWallet(req.walletAddress);
+      if (user && user.organization_id !== proposal.organization_id) {
+        return res.status(403).json({ 
+          error: 'You can only view suggestions for proposals from your organization' 
+        });
+      }
+      
+      // Get suggestions from categories the user follows
+      const suggestions = await categoryDb.getSuggestionsForProposal(id, req.walletAddress);
+      
+      // Add proposal options context for better frontend handling
+      const suggestionsWithContext = suggestions.map(suggestion => ({
+        ...suggestion,
+        proposal_option: suggestion.target_option_number 
+          ? proposal.options.find(opt => opt.option_number === suggestion.target_option_number)
+          : null
+      }));
+      
+      res.status(200).json({ 
+        suggestions: suggestionsWithContext,
+        proposal_id: id,
+        count: suggestions.length
+      });
+      
+    } catch (error) {
+      console.error('Error getting suggestions for proposal:', error);
+      res.status(500).json({ 
+        error: 'Failed to get suggestions for proposal' 
       });
     }
   });

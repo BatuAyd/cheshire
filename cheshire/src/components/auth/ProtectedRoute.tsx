@@ -6,25 +6,38 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const { isAuthenticated, isAuthenticating, userExists, userAddress } =
-    useSupabaseAuthStore();
+  const {
+    isAuthenticated,
+    isAuthenticating,
+    isInitializing,
+    userExists,
+    userAddress,
+  } = useSupabaseAuthStore();
   const location = useLocation();
 
   // Debug logging
   console.log("🔍 ProtectedRoute state:", {
     isAuthenticated,
     isAuthenticating,
+    isInitializing,
     userExists,
     userAddress,
     path: location.pathname,
   });
 
-  // Show loading while checking authentication
-  if (isAuthenticating) {
-    console.log("⏳ ProtectedRoute - Checking authentication...");
+  // Show loading while initializing JWT or checking authentication
+  if (isInitializing || isAuthenticating) {
+    console.log(
+      "⏳ ProtectedRoute - Initializing or checking authentication..."
+    );
     return (
       <div className="flex justify-center items-center min-h-[70vh]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-400"></div>
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-400"></div>
+          <p className="text-neutral-600 text-sm">
+            {isInitializing ? "Initializing..." : "Checking authentication..."}
+          </p>
+        </div>
       </div>
     );
   }

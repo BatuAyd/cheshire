@@ -6,6 +6,7 @@ import { testConnection } from './database/supabase.js';
 import { createAuthRoutes } from './routes/authRoutes.js';
 import { createUserRoutes } from './routes/userRoutes.js';
 import { createProposalRoutes } from './routes/proposalRoutes.js';
+import { createCategoryRoutes } from './routes/categoryRoutes.js';
 import { requireJwtAuth } from './middleware/jwtAuth.js';
 import { cleanupExpiredSessions } from './utils/supabaseAuth.js';
 
@@ -209,6 +210,10 @@ app.use('/api/user', userRoutes);
 // Proposal routes (JWT-protected) 
 const proposalRoutes = createProposalRoutes();
 app.use('/api/proposals', proposalRoutes);
+
+// Category routes (JWT-protected)
+const categoryRoutes = createCategoryRoutes();
+app.use('/api/categories', categoryRoutes);
 
 // ================ GRACEFUL SHUTDOWN ================
 
