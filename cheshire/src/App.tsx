@@ -12,21 +12,22 @@ import { useJWTAuthSync } from "./store/supabaseAuthStore";
 import { useWalletAuthSync } from "./hooks/useWalletAuthSync";
 
 // Components
-import Navbar from "./components/navigation/Navbar";
-import Footer from "./components/navigation/Footer";
-import ProtectedRoute from "./components/auth/ProtectedRoute";
-import SetupGuard from "./components/setup/SetupGuard";
+import { Navbar, Footer } from "./components/navigation";
+import { ProtectedRoute } from "./components/auth";
+import { SetupGuard } from "./components/setup";
 
 // Pages
-import SetupPage from "./pages/SetupPage";
-import ProfilePage from "./pages/ProfilePage";
-import CreateProposalPage from "./pages/CreateProposalPage";
-import ProposalsPage from "./pages/ProposalsPage";
-import ProposalDetailPage from "./pages/ProposalDetailPage";
-import CategoriesPage from "./pages/CategoriesPage";
-import AboutPage from "./pages/AboutPage";
-import StatusPage from "./pages/StatusPage";
-import LandingPage from "./pages/LandingPage";
+import {
+  LandingPage,
+  AboutPage,
+  StatusPage,
+  SetupPage,
+  ProposalsPage,
+  ProposalDetailPage,
+  CategoriesPage,
+  ProfilePage,
+  CreateProposalPage,
+} from "./pages";
 
 const NotFoundPage = () => (
   <div>

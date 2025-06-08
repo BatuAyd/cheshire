@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import ProposalForm from "../components/proposal/ProposalForm";
+import { ProposalForm } from "../components/proposal";
 
 const CreateProposalPage = () => {
   const navigate = useNavigate();

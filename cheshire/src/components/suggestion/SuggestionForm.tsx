@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from "react";
 import { apiFetch } from "../../utils/api";
 import type { Proposal } from "../../utils/proposalUtils";
 
+const API_BASE = import.meta.env.VITE_BACKEND_URL;
+
 // Types
 interface Category {
   category_id: string;
@@ -61,7 +63,7 @@ const SuggestionForm: React.FC<SuggestionFormProps> = ({
       try {
         setLoadingCategories(true);
         const response = await apiFetch(
-          "http://localhost:8080/api/categories/organization?limit=200&offset=0"
+          `${API_BASE}/api/categories/organization?limit=200&offset=0`
         );
 
         if (response.ok) {
@@ -95,7 +97,7 @@ const SuggestionForm: React.FC<SuggestionFormProps> = ({
       try {
         setLoadingUsers(true);
         const response = await apiFetch(
-          "http://localhost:8080/api/user/organization/users"
+          `${API_BASE}/api/user/organization/users`
         );
 
         if (response.ok) {
@@ -194,7 +196,7 @@ const SuggestionForm: React.FC<SuggestionFormProps> = ({
       };
 
       const response = await apiFetch(
-        `http://localhost:8080/api/categories/${formData.category_id}/suggest`,
+        `${API_BASE}/api/categories/${formData.category_id}/suggest`,
         {
           method: "POST",
           body: JSON.stringify(suggestionPayload),

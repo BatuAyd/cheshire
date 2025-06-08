@@ -1,4 +1,4 @@
-import UserSetup from "../components/setup/UserSetup";
+import { UserSetup } from "../components/setup";
 
 const SetupPage = () => {
   return <UserSetup />;

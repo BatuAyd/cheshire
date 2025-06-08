@@ -5,6 +5,8 @@ import {
   useSupabaseAuthActions,
 } from "../../store/supabaseAuthStore";
 
+const API_BASE = import.meta.env.VITE_BACKEND_URL;
+
 const CustomSignIn = () => {
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
@@ -37,7 +39,7 @@ const CustomSignIn = () => {
       console.log("🔐 User exists, proceeding with JWT signin...");
 
       // Step 1: Get nonce from server
-      const nonceResponse = await fetch("http://localhost:8080/api/auth/nonce");
+      const nonceResponse = await fetch(`${API_BASE}/api/auth/nonce`);
       const { nonce } = await nonceResponse.json();
 
       // Step 2: Create message

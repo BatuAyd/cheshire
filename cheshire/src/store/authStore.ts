@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { useEffect } from 'react';
 
+const API_BASE = import.meta.env.VITE_BACKEND_URL;
+
 // Cache configuration
 const CACHE_DURATION = 6 * 60 * 1000; // 6 minutes in milliseconds
 const CACHE_KEY = 'cheshire_auth_cache';
@@ -160,8 +162,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      const response = await fetch('http://localhost:8080/api/me', {
+
+      const response = await fetch(`${API_BASE}/api/me`, {
         credentials: 'include',
         signal: controller.signal
       });
@@ -231,7 +233,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     
     try {
       const response = await fetch(
-        `http://localhost:8080/api/user/exists?address=${encodeURIComponent(state.userAddress)}`,
+        `${API_BASE}/api/user/exists?address=${encodeURIComponent(state.userAddress)}`,
         { credentials: 'include' }
       );
       
@@ -259,8 +261,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      await fetch('http://localhost:8080/api/logout', {
+
+      await fetch(`${API_BASE}/api/logout`, {
         method: 'POST',
         credentials: 'include',
         signal: controller.signal

@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
+const API_BASE = import.meta.env.VITE_BACKEND_URL;
+
 // Types
 interface Organization {
   organization_id: string;
@@ -108,8 +110,8 @@ export const useUserProfile = () => {
     
     try {
       setLoadingOrganizations(true);
-      
-      const response = await fetch('http://localhost:8080/api/user/organizations');
+
+      const response = await fetch(`${API_BASE}/api/user/organizations`);
       const data = await response.json();
       
       if (response.ok) {
@@ -143,7 +145,7 @@ export const useUserProfile = () => {
       setUniqueIdCheck(prev => ({ ...prev, checking: true }));
       
       const response = await fetch(
-        `http://localhost:8080/api/user/unique-id/check?id=${encodeURIComponent(uniqueId)}`
+        `${API_BASE}/api/user/unique-id/check?id=${encodeURIComponent(uniqueId)}`
       );
       const data = await response.json();
       
@@ -185,12 +187,11 @@ export const useUserProfile = () => {
     
     try {
       setOrganizationCheck(prev => ({ ...prev, checking: true }));
-      
       const response = await fetch(
-        `http://localhost:8080/api/user/organization/check?id=${encodeURIComponent(organizationId)}`
+        `${API_BASE}/api/user/organization/check?id=${encodeURIComponent(organizationId)}`
       );
       const data = await response.json();
-      
+
       if (response.ok) {
         setOrganizationCheck({
           exists: data.exists,
@@ -225,8 +226,8 @@ export const useUserProfile = () => {
   }) => {
     try {
       setCreatingUser(true);
-      
-      const response = await fetch('http://localhost:8080/api/user/create', {
+
+      const response = await fetch(`${API_BASE}/api/user/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -257,7 +258,7 @@ export const useUserProfile = () => {
    */
   const getUserProfile = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/user/profile', {
+      const response = await fetch(`${API_BASE}/api/user/profile`, {
         credentials: 'include', // Include auth cookies
       });
       
@@ -283,7 +284,7 @@ export const useUserProfile = () => {
   const checkUserExists = useCallback(async (walletAddress: string) => {
     try {
       const response = await fetch(
-        `http://localhost:8080/api/user/exists?address=${encodeURIComponent(walletAddress)}`
+        `${API_BASE}/api/user/exists?address=${encodeURIComponent(walletAddress)}`
       );
       const data = await response.json();
       

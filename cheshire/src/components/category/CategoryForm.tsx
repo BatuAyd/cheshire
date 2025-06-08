@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { apiFetch } from "../../utils/api";
 
+const API_BASE = import.meta.env.VITE_BACKEND_URL;
+
 interface Category {
   category_id: string;
   title: string;
@@ -127,16 +129,13 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ onClose, onSuccess }) => {
     try {
       setSubmitting(true);
 
-      const response = await apiFetch(
-        "http://localhost:8080/api/categories/create",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            title: formData.title.trim(),
-            description: formData.description.trim(),
-          }),
-        }
-      );
+      const response = await apiFetch(`${API_BASE}/api/categories/create`, {
+        method: "POST",
+        body: JSON.stringify({
+          title: formData.title.trim(),
+          description: formData.description.trim(),
+        }),
+      });
 
       const data = await response.json();
 

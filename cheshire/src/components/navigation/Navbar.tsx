@@ -6,7 +6,7 @@ import {
   useSupabaseAuthStore,
   useSupabaseAuthActions,
 } from "../../store/supabaseAuthStore";
-import CustomSignIn from "../auth/CustomSignIn";
+import { CustomSignIn } from "../auth";
 
 const Navbar = () => {
   // State to track scroll position for blur effect

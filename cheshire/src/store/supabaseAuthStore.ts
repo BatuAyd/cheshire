@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { useEffect } from 'react';
 
+const API_BASE = import.meta.env.VITE_BACKEND_URL;
+
 // JWT token key for localStorage
 const JWT_TOKEN_KEY = 'cheshire_jwt_token';
 
@@ -129,7 +131,7 @@ export const useSupabaseAuthStore = create<AuthState>((set, get) => ({
     
     try {
       const response = await fetch(
-        `http://localhost:8080/api/auth/check-user?address=${encodeURIComponent(walletAddress)}`
+        `${API_BASE}/api/auth/check-user?address=${encodeURIComponent(walletAddress)}`
       );
       
       const data = await response.json();
@@ -164,7 +166,7 @@ export const useSupabaseAuthStore = create<AuthState>((set, get) => ({
     set({ isAuthenticating: true });
     
     try {
-      const response = await fetch('http://localhost:8080/api/auth/signin', {
+      const response = await fetch(`${API_BASE}/api/auth/signin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -205,7 +207,7 @@ export const useSupabaseAuthStore = create<AuthState>((set, get) => ({
     
     try {
       if (jwtToken) {
-        await fetch('http://localhost:8080/api/auth/signout', {
+        await fetch(`${API_BASE}/api/auth/signout`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${jwtToken}`,

@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { getProposalStatus } from "../../utils/proposalUtils";
-import TextHighlighter from "../search/TextHighlighter";
+import { TextHighlighter } from "../search";
 import type { Proposal } from "../../utils/proposalUtils";
 
 // Types

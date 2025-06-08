@@ -1,6 +1,8 @@
 import { createAuthenticationAdapter, AuthenticationStatus } from '@rainbow-me/rainbowkit';
 import { useSupabaseAuthStore, useSupabaseAuthActions } from '../store/supabaseAuthStore';
 
+const API_BASE = import.meta.env.VITE_BACKEND_URL;
+
 /**
  * Creates a JWT authentication adapter for RainbowKit
  */
@@ -11,7 +13,7 @@ export const createJWTAdapter = () => {
      */
     getNonce: async () => {
       try {
-        const response = await fetch('http://localhost:8080/api/auth/nonce');
+        const response = await fetch(`${API_BASE}/api/auth/nonce`);
         const { nonce } = await response.json();
         return nonce;
       } catch (error) {

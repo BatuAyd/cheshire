@@ -1,0 +1,9 @@
+export { default as LandingPage } from './LandingPage';
+export { default as AboutPage } from './AboutPage';
+export { default as StatusPage } from './StatusPage';
+export { default as SetupPage } from './SetupPage';
+export { default as ProposalsPage } from './ProposalsPage';
+export { default as ProposalDetailPage } from './ProposalDetailPage';
+export { default as CategoriesPage } from './CategoriesPage';
+export { default as ProfilePage } from './ProfilePage';
+export { default as CreateProposalPage } from './CreateProposalPage';

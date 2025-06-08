@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../utils/api";
-import ProposalCard from "../components/proposal/ProposalCard";
-import LoadingSkeleton from "../components/proposal/LoadingSkeleton";
-import EmptyState from "../components/proposal/EmptyState";
-import SortDropdown from "../components/proposal/SortDropdown";
-import FilterChips from "../components/proposal/FilterChips";
-import SearchBar from "../components/search/SearchBar";
-import PaginationControls from "../components/pagination/PaginationControls";
+import {
+  ProposalCard,
+  LoadingSkeleton,
+  EmptyState,
+  SortDropdown,
+  FilterChips,
+} from "../components/proposal";
+import { SearchBar } from "../components/search";
+import { PaginationControls } from "../components/pagination";
 import { useURLParams } from "../hooks/useURLParams";
 import {
   processProposals,
@@ -17,6 +19,8 @@ import {
   ITEMS_PER_PAGE,
 } from "../utils/proposalUtils";
 import type { Proposal } from "../utils/proposalUtils";
+
+const API_BASE = import.meta.env.VITE_BACKEND_URL;
 
 // Types
 interface ProposalsResponse {
@@ -86,10 +90,8 @@ const ProposalsPage: React.FC = () => {
         // Load more proposals to support pagination properly
         // We'll load enough to show multiple pages
         const [proposalsResponse, canCreateResponse] = await Promise.all([
-          apiFetch(
-            "http://localhost:8080/api/proposals/organization?limit=200&offset=0"
-          ),
-          apiFetch("http://localhost:8080/api/proposals/can-create"),
+          apiFetch(`${API_BASE}/api/proposals/organization?limit=200&offset=0`),
+          apiFetch(`${API_BASE}/api/proposals/can-create`),
         ]);
 
         // Handle proposals response

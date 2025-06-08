@@ -4,6 +4,8 @@ import { useAccount } from "wagmi";
 import { apiFetch } from "../../utils/api";
 import { useSupabaseAuthStore } from "../../store/supabaseAuthStore";
 
+const API_BASE = import.meta.env.VITE_BACKEND_URL;
+
 const UserSetupSimple = () => {
   const navigate = useNavigate();
   const { address } = useAccount();
@@ -27,9 +29,7 @@ const UserSetupSimple = () => {
   useEffect(() => {
     const loadOrgs = async () => {
       try {
-        const response = await fetch(
-          "http://localhost:8080/api/user/organizations"
-        );
+        const response = await fetch(`${API_BASE}/api/user/organizations`);
         const data = await response.json();
         if (response.ok) {
           setOrganizations(data.organizations || []);
@@ -69,7 +69,7 @@ const UserSetupSimple = () => {
 
         try {
           const response = await fetch(
-            `http://localhost:8080/api/user/unique-id/check?id=${formData.unique_id}`
+            `${API_BASE}/api/user/unique-id/check?id=${formData.unique_id}`
           );
           const data = await response.json();
 
@@ -113,7 +113,7 @@ const UserSetupSimple = () => {
 
         try {
           const response = await fetch(
-            `http://localhost:8080/api/user/organization/check?id=${formData.organization_id}`
+            `${API_BASE}/api/user/organization/check?id=${formData.organization_id}`
           );
           const data = await response.json();
 
@@ -175,7 +175,7 @@ const UserSetupSimple = () => {
         wallet_address: address, // Include wallet address for user creation
       };
 
-      const response = await apiFetch("http://localhost:8080/api/user/create", {
+      const response = await apiFetch(`${API_BASE}/api/user/create`, {
         method: "POST",
         body: JSON.stringify(requestBody),
       });

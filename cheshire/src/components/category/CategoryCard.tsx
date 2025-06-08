@@ -1,5 +1,5 @@
 import React from "react";
-import TextHighlighter from "../search/TextHighlighter";
+import { TextHighlighter } from "../search";
 
 interface Category {
   category_id: string;

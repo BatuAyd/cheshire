@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { apiFetch } from "../utils/api";
-import CategoryCard from "../components/category/CategoryCard";
-import CategoryModal from "../components/category/CategoryModal";
-import CreateCategoryForm from "../components/category/CategoryForm";
-import LoadingSkeleton from "../components/proposal/LoadingSkeleton";
-import EmptyState from "../components/proposal/EmptyState";
-import SearchBar from "../components/search/SearchBar";
-import PaginationControls from "../components/pagination/PaginationControls";
+import {
+  CategoryCard,
+  CategoryModal,
+  CategoryForm,
+} from "../components/category";
+import { LoadingSkeleton, EmptyState } from "../components/proposal";
+import { SearchBar } from "../components/search";
+import { PaginationControls } from "../components/pagination";
 import { useURLParams } from "../hooks/useURLParams";
+
+const API_BASE = import.meta.env.VITE_BACKEND_URL;
 
 // Types
 interface Category {
@@ -111,7 +114,7 @@ const CategoriesPage: React.FC = () => {
         setError("");
 
         const response = await apiFetch(
-          "http://localhost:8080/api/categories/organization?limit=200&offset=0"
+          `${API_BASE}/api/categories/organization?limit=200&offset=0`
         );
 
         if (response.ok) {
@@ -188,7 +191,7 @@ const CategoriesPage: React.FC = () => {
     try {
       const method = isFollowing ? "DELETE" : "POST";
       const response = await apiFetch(
-        `http://localhost:8080/api/categories/${categoryId}/follow`,
+        `${API_BASE}/api/categories/${categoryId}/follow`,
         { method }
       );
 
@@ -391,7 +394,7 @@ const CategoriesPage: React.FC = () => {
 
         {/* Create Category Form */}
         {showCreateForm && (
-          <CreateCategoryForm
+          <CategoryForm
             onClose={() => setShowCreateForm(false)}
             onSuccess={handleCategoryCreated}
           />

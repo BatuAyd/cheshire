@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "../utils/api";
-import ProfileInfo from "../components/profile/ProfileInfo";
+import { ProfileInfo } from "../components/profile";
+
+const API_BASE = import.meta.env.VITE_BACKEND_URL;
 
 interface UserProfile {
   wallet_address: string;
@@ -26,9 +28,7 @@ const ProfilePage = () => {
         setLoading(true);
         setError("");
 
-        const response = await apiFetch(
-          "http://localhost:8080/api/user/profile"
-        );
+        const response = await apiFetch(`${API_BASE}/api/user/profile`);
 
         const data = await response.json();
 

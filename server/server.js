@@ -81,7 +81,7 @@ setInterval(async () => {
 
 // Set up CORS
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:5173",
+  origin: process.env.FRONTEND_URL,
   credentials: true
 }));
 
@@ -235,7 +235,7 @@ const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`🚀 Cheshire API Server running on port ${PORT}`);
   console.log(`🔐 Authentication: JWT with Supabase sessions`);
-  console.log(`📡 CORS configured for: ${process.env.FRONTEND_URL || "http://localhost:5173"}`);
+  console.log(`📡 CORS configured for: ${process.env.FRONTEND_URL}`);
   console.log(`💾 Database: Supabase PostgreSQL`);
   console.log(`⚡ Redis: ${redisConnected ? 'Upstash connected (voting ready)' : 'Upstash disconnected (voting unavailable)'}`);
 });

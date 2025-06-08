@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { apiFetch } from "../../utils/api";
 import type { Proposal } from "../../utils/proposalUtils";
 
+const API_BASE = import.meta.env.VITE_BACKEND_URL;
+
 // Types
 interface Suggestion {
   suggestion_id: string;
@@ -53,7 +55,7 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
       try {
         setLoadingCategories(true);
         const response = await apiFetch(
-          "http://localhost:8080/api/categories/organization?limit=200&offset=0"
+          `${API_BASE}/api/categories/organization?limit=200&offset=0`
         );
 
         if (response.ok) {

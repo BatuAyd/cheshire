@@ -2,9 +2,10 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiFetch } from "../utils/api";
 import { getProposalStatus } from "../utils/proposalUtils";
-import SuggestionDisplay from "../components/suggestion/SuggestionDisplay";
-import SuggestionForm from "../components/suggestion/SuggestionForm";
+import { SuggestionDisplay, SuggestionForm } from "../components/suggestion";
 import type { Proposal } from "../utils/proposalUtils";
+
+const API_BASE = import.meta.env.VITE_BACKEND_URL;
 
 // Types for suggestions
 interface Suggestion {
@@ -163,9 +164,7 @@ const ProposalDetailPage: React.FC = () => {
         setLoading(true);
         setError("");
 
-        const response = await apiFetch(
-          `http://localhost:8080/api/proposals/${id}`
-        );
+        const response = await apiFetch(`${API_BASE}/api/proposals/${id}`);
 
         if (response.status === 404) {
           setNotFound(true);
@@ -195,7 +194,7 @@ const ProposalDetailPage: React.FC = () => {
       try {
         setSuggestionsLoading(true);
         const response = await apiFetch(
-          `http://localhost:8080/api/proposals/${proposal.proposal_id}/suggestions`
+          `${API_BASE}/api/proposals/${proposal.proposal_id}/suggestions`
         );
 
         if (response.ok) {
@@ -227,7 +226,7 @@ const ProposalDetailPage: React.FC = () => {
       const loadSuggestions = async () => {
         try {
           const response = await apiFetch(
-            `http://localhost:8080/api/proposals/${proposal.proposal_id}/suggestions`
+            `${API_BASE}/api/proposals/${proposal.proposal_id}/suggestions`
           );
           if (response.ok) {
             const data = await response.json();

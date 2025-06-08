@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 
+const API_BASE = import.meta.env.VITE_BACKEND_URL;
+
 interface ProposalFormProps {
   onSuccess: (proposal: any) => void;
   onError: (error: string) => void;
@@ -160,12 +162,9 @@ const ProposalForm = ({ onSuccess, onError }: ProposalFormProps) => {
   useEffect(() => {
     const loadInfo = async () => {
       try {
-        const response = await fetch(
-          "http://localhost:8080/api/proposals/can-create",
-          {
-            credentials: "include",
-          }
-        );
+        const response = await fetch(`${API_BASE}/api/proposals/can-create`, {
+          credentials: "include",
+        });
         const data = await response.json();
 
         if (response.ok) {
@@ -255,22 +254,19 @@ const ProposalForm = ({ onSuccess, onError }: ProposalFormProps) => {
         (option) => option.trim().length >= OPTION_MIN_CHARS
       );
 
-      const response = await fetch(
-        "http://localhost:8080/api/proposals/create",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify({
-            title: formData.title.trim(),
-            description: formData.description.trim(),
-            voting_deadline: formData.voting_deadline,
-            options: cleanOptions,
-          }),
-        }
-      );
+      const response = await fetch(`${API_BASE}/api/proposals/create`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          title: formData.title.trim(),
+          description: formData.description.trim(),
+          voting_deadline: formData.voting_deadline,
+          options: cleanOptions,
+        }),
+      });
 
       const data = await response.json();
 
