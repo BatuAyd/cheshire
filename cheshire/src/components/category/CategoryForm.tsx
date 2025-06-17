@@ -306,7 +306,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ onClose, onSuccess }) => {
               <button
                 type="button"
                 onClick={handleClose}
-                className="flex-1 py-3 px-6 border border-neutral-300 text-neutral-700 rounded-lg font-medium hover:bg-neutral-50 transition-colors"
+                className="flex-1 py-3 px-6 border border-neutral-300 text-neutral-700 rounded-lg font-medium hover:bg-neutral-50 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -316,7 +316,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ onClose, onSuccess }) => {
                 className={`flex-1 py-3 px-6 rounded-lg font-medium transition-all ${
                   submitting || !validation.overall
                     ? "bg-neutral-300 text-neutral-500 cursor-not-allowed"
-                    : "bg-orange-400 text-white hover:bg-orange-500 hover:shadow-md active:scale-95"
+                    : "bg-orange-400 text-white hover:bg-orange-500 hover:shadow-md active:scale-95 cursor-pointer"
                 }`}
               >
                 {submitting ? (

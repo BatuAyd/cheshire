@@ -43,11 +43,18 @@ interface SuggestionDisplayProps {
 const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
   suggestions,
   loading,
+  proposal,
   canCreateSuggestions,
   onCreateSuggestion,
 }) => {
   const [userCategories, setUserCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
+  const [applyingStates, setApplyingStates] = useState<Record<string, boolean>>(
+    {}
+  );
+  const [appliedStates, setAppliedStates] = useState<Record<string, boolean>>(
+    {}
+  );
 
   // Load user's categories to check if they can create suggestions
   useEffect(() => {
@@ -60,7 +67,6 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
 
         if (response.ok) {
           const data = await response.json();
-          // Filter to only categories created by the current user
           setUserCategories(data.categories || []);
         }
       } catch (error) {
@@ -75,23 +81,129 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
   }, []);
 
   const handleApplySuggestion = async (suggestion: Suggestion) => {
+    // Set loading state for this specific suggestion
+    setApplyingStates((prev) => ({
+      ...prev,
+      [suggestion.suggestion_id]: true,
+    }));
+
     try {
       if (suggestion.suggestion_type === "delegate") {
-        // For delegation suggestions, show info about the target user
-        alert(
-          `This would delegate your vote to ${suggestion.users?.first_name} ${suggestion.users?.last_name} (@${suggestion.target_user}). Delegation features coming soon!`
+        // Handle delegation suggestion
+        if (!suggestion.target_user) {
+          throw new Error("No target user specified for delegation");
+        }
+
+        const response = await apiFetch(
+          `${API_BASE}/api/proposals/${proposal.proposal_id}/delegate`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              target_user: suggestion.target_user,
+            }),
+          }
         );
+
+        const data = await response.json();
+
+        if (response.ok) {
+          // Success notification
+          const targetName = suggestion.users
+            ? `${suggestion.users.first_name} ${suggestion.users.last_name}`
+            : suggestion.target_user;
+
+          alert(
+            `✅ Successfully delegated your vote to ${targetName} (@${suggestion.target_user})`
+          );
+
+          // Mark as applied
+          setAppliedStates((prev) => ({
+            ...prev,
+            [suggestion.suggestion_id]: true,
+          }));
+        } else {
+          // Handle specific errors
+          if (response.status === 429) {
+            alert(
+              `⏳ Rate limit: ${data.error}\nPlease wait ${
+                data.cooldown_seconds || 60
+              } seconds before trying again.`
+            );
+          } else if (
+            response.status === 400 &&
+            data.error?.includes("Delegation not allowed")
+          ) {
+            alert(`🚫 ${data.error}`);
+          } else if (response.status === 410) {
+            alert("⏰ Voting period has ended for this proposal.");
+          } else {
+            alert(`❌ Failed to delegate: ${data.error || "Unknown error"}`);
+          }
+        }
       } else if (suggestion.suggestion_type === "vote_option") {
-        // For voting suggestions, show the option they suggest
-        const optionText =
-          suggestion.proposal_option?.option_text ||
-          `Option ${suggestion.target_option_number}`;
-        alert(
-          `This would cast your vote for: "${optionText}". Direct voting features coming soon!`
+        // Handle voting suggestion
+        if (!suggestion.target_option_number) {
+          throw new Error("No target option specified for voting");
+        }
+
+        const response = await apiFetch(
+          `${API_BASE}/api/proposals/${proposal.proposal_id}/vote`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              option_number: suggestion.target_option_number,
+            }),
+          }
         );
+
+        const data = await response.json();
+
+        if (response.ok) {
+          // Success notification
+          const optionText =
+            suggestion.proposal_option?.option_text ||
+            `Option ${suggestion.target_option_number}`;
+
+          alert(`✅ Successfully voted for: "${optionText}"`);
+
+          // Mark as applied
+          setAppliedStates((prev) => ({
+            ...prev,
+            [suggestion.suggestion_id]: true,
+          }));
+        } else {
+          // Handle specific errors
+          if (response.status === 429) {
+            alert(
+              `⏳ Rate limit: ${data.error}\nPlease wait ${
+                data.cooldown_seconds || 60
+              } seconds before trying again.`
+            );
+          } else if (response.status === 410) {
+            alert("⏰ Voting period has ended for this proposal.");
+          } else if (
+            response.status === 400 &&
+            data.error?.includes("Option")
+          ) {
+            alert(`🚫 ${data.error}`);
+          } else {
+            alert(`❌ Failed to vote: ${data.error || "Unknown error"}`);
+          }
+        }
       }
     } catch (error) {
       console.error("Error applying suggestion:", error);
+      alert(
+        `❌ Network error: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    } finally {
+      // Clear loading state
+      setApplyingStates((prev) => ({
+        ...prev,
+        [suggestion.suggestion_id]: false,
+      }));
     }
   };
 
@@ -102,6 +214,13 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  // Check if voting is still active
+  const isVotingActive = () => {
+    const now = new Date();
+    const deadline = new Date(proposal.voting_deadline);
+    return now < deadline;
   };
 
   // Check if user owns any categories (can create suggestions)
@@ -120,7 +239,7 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
           <button
             onClick={onCreateSuggestion}
             disabled={loadingCategories}
-            className="px-4 py-2 bg-orange-400 text-white rounded-lg font-medium transition-all hover:bg-orange-500 hover:shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-2"
+            className="px-4 py-2 bg-orange-400 text-white rounded-lg font-medium transition-all hover:bg-orange-500 hover:shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
           >
             <svg
               className="w-4 h-4"
@@ -195,116 +314,157 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
       ) : (
         // Suggestions list
         <div className="space-y-4">
-          {suggestions.map((suggestion) => (
-            <div
-              key={suggestion.suggestion_id}
-              className="bg-white border border-neutral-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-            >
-              {/* Header with category and apply button */}
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h4 className="font-medium text-neutral-800 mb-1">
-                    {suggestion.categories.title}
-                  </h4>
-                  <p className="text-xs text-neutral-500">
-                    {formatSuggestionTime(suggestion.created_at)}
-                  </p>
+          {suggestions.map((suggestion) => {
+            const isApplying =
+              applyingStates[suggestion.suggestion_id] || false;
+            const isApplied = appliedStates[suggestion.suggestion_id] || false;
+            const votingActive = isVotingActive();
+
+            return (
+              <div
+                key={suggestion.suggestion_id}
+                className="bg-white border border-neutral-200 rounded-lg p-6 hover:shadow-md transition-shadow"
+              >
+                {/* Header with category and apply button */}
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h4 className="font-medium text-neutral-800 mb-1">
+                      {suggestion.categories.title}
+                    </h4>
+                    <p className="text-xs text-neutral-500">
+                      {formatSuggestionTime(suggestion.created_at)}
+                    </p>
+                  </div>
+
+                  {/* Apply Button with different states */}
+                  <button
+                    onClick={() => handleApplySuggestion(suggestion)}
+                    disabled={isApplying || isApplied || !votingActive}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
+                      isApplied
+                        ? "bg-green-100 text-green-700 cursor-not-allowed"
+                        : !votingActive
+                        ? "bg-neutral-100 text-neutral-500 cursor-not-allowed"
+                        : isApplying
+                        ? "bg-blue-300 text-white cursor-not-allowed"
+                        : "bg-blue-500 text-white hover:bg-blue-600 hover:shadow-md active:scale-95 cursor-pointer"
+                    }`}
+                  >
+                    {isApplying ? (
+                      <div className="flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                        Applying...
+                      </div>
+                    ) : isApplied ? (
+                      <div className="flex items-center gap-1">
+                        <svg
+                          className="w-4 h-4"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        Applied
+                      </div>
+                    ) : !votingActive ? (
+                      "Voting Ended"
+                    ) : (
+                      "Apply"
+                    )}
+                  </button>
                 </div>
 
-                <button
-                  onClick={() => handleApplySuggestion(suggestion)}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg font-medium transition-all hover:bg-blue-600 hover:shadow-md active:scale-95 text-sm"
-                >
-                  Apply
-                </button>
-              </div>
+                {/* Suggestion content */}
+                <div className="flex items-start gap-3">
+                  {/* Icon based on suggestion type */}
+                  <div className="flex-shrink-0 mt-1">
+                    {suggestion.suggestion_type === "delegate" ? (
+                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                        <svg
+                          className="w-4 h-4 text-purple-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                          />
+                        </svg>
+                      </div>
+                    ) : (
+                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                        <svg
+                          className="w-4 h-4 text-green-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
 
-              {/* Suggestion content */}
-              <div className="flex items-start gap-3">
-                {/* Icon based on suggestion type */}
-                <div className="flex-shrink-0 mt-1">
-                  {suggestion.suggestion_type === "delegate" ? (
-                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                      <svg
-                        className="w-4 h-4 text-purple-600"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                        />
-                      </svg>
-                    </div>
-                  ) : (
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                      <svg
-                        className="w-4 h-4 text-green-600"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                    </div>
-                  )}
-                </div>
-
-                {/* Suggestion text */}
-                <div className="flex-1">
-                  {suggestion.suggestion_type === "delegate" ? (
-                    <div>
-                      <p className="text-neutral-800 mb-1">
-                        <span className="font-medium">Delegate to:</span>{" "}
-                        {suggestion.users ? (
-                          <>
-                            {suggestion.users.first_name}{" "}
-                            {suggestion.users.last_name}{" "}
+                  {/* Suggestion text */}
+                  <div className="flex-1">
+                    {suggestion.suggestion_type === "delegate" ? (
+                      <div>
+                        <p className="text-neutral-800 mb-1">
+                          <span className="font-medium">Delegate to:</span>{" "}
+                          {suggestion.users ? (
+                            <>
+                              {suggestion.users.first_name}{" "}
+                              {suggestion.users.last_name}{" "}
+                              <span className="text-neutral-500">
+                                (@{suggestion.target_user})
+                              </span>
+                            </>
+                          ) : (
                             <span className="text-neutral-500">
-                              (@{suggestion.target_user})
+                              @{suggestion.target_user}
                             </span>
-                          </>
-                        ) : (
-                          <span className="text-neutral-500">
-                            @{suggestion.target_user}
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-neutral-600 text-sm">
-                        Let this expert vote on your behalf for this proposal.
-                      </p>
-                    </div>
-                  ) : (
-                    <div>
-                      <p className="text-neutral-800 mb-1">
-                        <span className="font-medium">Vote for:</span>{" "}
-                        {suggestion.proposal_option ? (
-                          <span className="font-medium text-blue-600">
-                            {suggestion.proposal_option.option_text}
-                          </span>
-                        ) : (
-                          <span className="font-medium text-blue-600">
-                            Option {suggestion.target_option_number}
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-neutral-600 text-sm">
-                        This category recommends choosing this option.
-                      </p>
-                    </div>
-                  )}
+                          )}
+                        </p>
+                        <p className="text-neutral-600 text-sm">
+                          Let this expert vote on your behalf for this proposal.
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-neutral-800 mb-1">
+                          <span className="font-medium">Vote for:</span>{" "}
+                          {suggestion.proposal_option ? (
+                            <span className="font-medium text-blue-600">
+                              {suggestion.proposal_option.option_text}
+                            </span>
+                          ) : (
+                            <span className="font-medium text-blue-600">
+                              Option {suggestion.target_option_number}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-neutral-600 text-sm">
+                          This category recommends choosing this option.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -327,10 +487,9 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
               About Category Suggestions
             </h4>
             <p className="text-blue-700 text-sm">
-              These suggestions come from categories you follow. You can apply
-              them to quickly vote or delegate based on expert recommendations.
-              The voting and delegation features will be implemented in future
-              updates.
+              These suggestions come from categories you follow. Click "Apply"
+              to quickly vote or delegate based on expert recommendations.
+              {!isVotingActive() && " Voting has ended for this proposal."}
             </p>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { apiFetch } from "../../utils/api";
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL;
 
@@ -162,9 +163,12 @@ const ProposalForm = ({ onSuccess, onError }: ProposalFormProps) => {
   useEffect(() => {
     const loadInfo = async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/proposals/can-create`, {
-          credentials: "include",
-        });
+        const response = await apiFetch(
+          `${API_BASE}/api/proposals/can-create`,
+          {
+            credentials: "include",
+          }
+        );
         const data = await response.json();
 
         if (response.ok) {
@@ -254,7 +258,7 @@ const ProposalForm = ({ onSuccess, onError }: ProposalFormProps) => {
         (option) => option.trim().length >= OPTION_MIN_CHARS
       );
 
-      const response = await fetch(`${API_BASE}/api/proposals/create`, {
+      const response = await apiFetch(`${API_BASE}/api/proposals/create`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

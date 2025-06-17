@@ -7,8 +7,12 @@ import { createAuthRoutes } from './routes/authRoutes.js';
 import { createUserRoutes } from './routes/userRoutes.js';
 import { createProposalRoutes } from './routes/proposalRoutes.js';
 import { createCategoryRoutes } from './routes/categoryRoutes.js';
+import { createVotingRoutes, initializeVotingOps } from './routes/votingRoutes.js';
 import { requireJwtAuth } from './middleware/jwtAuth.js';
 import { cleanupExpiredSessions } from './utils/supabaseAuth.js';
+import { createVotingOps } from './utils/redisKeys.js';
+import { createBackupManager, initializeBackupSystem } from './utils/redisBackup.js';
+import { startProposalScheduler } from './utils/proposalScheduler.js';
 
 // Load environment variables
 dotenv.config();
@@ -76,6 +80,45 @@ setInterval(async () => {
     console.error('⚠️ Error in periodic cleanup:', error);
   }
 }, 12 * 60 * 60 * 1000); // 12 hours
+
+// ================ VOTING SYSTEM SETUP ================
+
+// Initialize liquid democracy utilities
+export const votingOps = createVotingOps(redis);
+export const backupManager = createBackupManager(redis);
+const cleanupBackups = initializeBackupSystem(redis);
+initializeVotingOps(redis);
+
+app.get("/api/debug/redis-vote/:proposalId/:wallet", async (req, res) => {
+  try {
+    const { proposalId, wallet } = req.params;
+    
+    // Test direct Redis operations
+    const allVotes = await redis.hgetall(`proposal:${proposalId}:votes`);
+    const userVote = await redis.hget(`proposal:${proposalId}:votes`, wallet.toLowerCase());
+    const participants = await redis.smembers(`proposal:${proposalId}:participants`);
+    
+    res.json({
+      debug_info: {
+        all_votes: allVotes,
+        user_vote: userVote,
+        user_vote_type: typeof userVote,
+        user_vote_null_check: userVote === null,
+        user_vote_undefined_check: userVote === undefined,
+        user_vote_empty_check: userVote === '',
+        participants: participants,
+        wallet_key_used: wallet.toLowerCase(),
+        redis_key: `proposal:${proposalId}:votes`
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message, stack: error.stack });
+  }
+});
+
+// ================ DELEGATION RESOLUTION SETUP ================
+
+startProposalScheduler(redis); // Every 5 minutes check for expired proposals
 
 // ================ MIDDLEWARE SETUP ================
 
@@ -215,17 +258,25 @@ app.use('/api/proposals', proposalRoutes);
 const categoryRoutes = createCategoryRoutes();
 app.use('/api/categories', categoryRoutes);
 
+// Voting routes (JWT-protected, Redis-based)
+const votingRoutes = createVotingRoutes();
+app.use('/api/proposals', votingRoutes);
+
 // ================ GRACEFUL SHUTDOWN ================
 
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully...');
-  // No need to close Upstash connection - it's REST API based
+  
+  cleanupBackups();
+
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   console.log('SIGINT received, shutting down gracefully...');
-  // No need to close Upstash connection - it's REST API based
+  
+  cleanupBackups();
+
   process.exit(0);
 });
 
