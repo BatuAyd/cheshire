@@ -52,27 +52,183 @@ The liquid voting system allows users to:
 4. **Audit Trail**: All actions logged to PostgreSQL for transparency
 5. **Backup System**: Hourly Redis snapshots stored for disaster recovery
 
-### Database Schema
+## Database
 
-#### Core Tables
-- `users` - User profiles with unique identifiers
-- `organizations` - Organization management
-- `proposals` - Proposal data with voting deadlines
-- `proposal_options` - Voting options for each proposal
-- `categories` - Expert categories for delegation guidance
-- `category_followers` - User category subscriptions
-- `category_suggestions` - Expert voting recommendations
+The system uses PostgreSQL for persistent data storage with the following schema:
 
-#### Liquid Voting Tables
-- `vote_audit` - Complete audit trail for all voting actions
-- `delegation_resolution_audit` - Delegation chain resolution results
-- `final_vote_results_audit` - Final vote counting with metadata
-- `redis_snapshots` - Redis backup system for disaster recovery
-- `vote_results` - Computed vote tallies per proposal option
+### Core Tables
+- **organizations** - Organization management
+- **users** - User profiles with wallet addresses and unique identifiers
+- **proposals** - Proposal data with voting deadlines and validation
+- **proposal_options** - Voting options for each proposal (1-10 options)
 
-#### Authentication
-- `user_sessions` - JWT session management
-- Foreign key constraints ensure data integrity
+### Category System
+- **categories** - Expert categories for delegation guidance
+- **category_followers** - User subscriptions to expert categories
+- **category_suggestions** - Expert voting recommendations
+
+### Liquid Voting and Audit
+- **vote_audit** - Complete audit trail for all voting actions
+- **delegation_resolution_audit** - Delegation chain resolution results
+- **final_vote_results_audit** - Final vote counting with metadata
+- **redis_snapshots** - Backup system for Redis voting data
+
+### Authentication
+- **user_sessions** - JWT token management and session control
+
+### Schema
+
+```sql
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.categories (
+  category_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  organization_id text NOT NULL,
+  created_by text NOT NULL,
+  title text NOT NULL CHECK (length(TRIM(BOTH FROM title)) >= 5 AND length(TRIM(BOTH FROM title)) <= 30),
+  description text NOT NULL CHECK (length(TRIM(BOTH FROM description)) >= 50 AND length(TRIM(BOTH FROM description)) <= 1000),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT categories_pkey PRIMARY KEY (category_id),
+  CONSTRAINT categories_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(organization_id),
+  CONSTRAINT categories_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(wallet_address)
+);
+
+CREATE TABLE public.category_followers (
+  category_id uuid NOT NULL,
+  follower_wallet text NOT NULL,
+  followed_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT category_followers_pkey PRIMARY KEY (category_id, follower_wallet),
+  CONSTRAINT category_followers_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(category_id),
+  CONSTRAINT category_followers_follower_wallet_fkey FOREIGN KEY (follower_wallet) REFERENCES public.users(wallet_address)
+);
+
+CREATE TABLE public.category_suggestions (
+  suggestion_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  category_id uuid NOT NULL,
+  proposal_id uuid NOT NULL,
+  suggestion_type text NOT NULL CHECK (suggestion_type = ANY (ARRAY['delegate'::text, 'vote_option'::text])),
+  target_user text,
+  target_option_number integer,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT category_suggestions_pkey PRIMARY KEY (suggestion_id),
+  CONSTRAINT category_suggestions_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(category_id),
+  CONSTRAINT category_suggestions_proposal_id_fkey FOREIGN KEY (proposal_id) REFERENCES public.proposals(proposal_id),
+  CONSTRAINT category_suggestions_proposal_id_target_option_number_fkey FOREIGN KEY (proposal_id) REFERENCES public.proposal_options(proposal_id),
+  CONSTRAINT category_suggestions_proposal_id_target_option_number_fkey FOREIGN KEY (target_option_number) REFERENCES public.proposal_options(proposal_id),
+  CONSTRAINT category_suggestions_proposal_id_target_option_number_fkey FOREIGN KEY (proposal_id) REFERENCES public.proposal_options(option_number),
+  CONSTRAINT category_suggestions_proposal_id_target_option_number_fkey FOREIGN KEY (target_option_number) REFERENCES public.proposal_options(option_number),
+  CONSTRAINT category_suggestions_target_user_fkey FOREIGN KEY (target_user) REFERENCES public.users(unique_id)
+);
+
+CREATE TABLE public.delegation_resolution_audit (
+  resolution_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  proposal_id uuid NOT NULL UNIQUE,
+  resolution_data jsonb NOT NULL CHECK (resolution_data ? 'proposalId'::text AND resolution_data ? 'computedAt'::text AND resolution_data ? 'delegationResolution'::text AND resolution_data ? 'votingPowers'::text AND resolution_data ? 'metadata'::text),
+  computed_at timestamp with time zone NOT NULL DEFAULT now(),
+  computation_time_ms integer,
+  status text NOT NULL DEFAULT 'completed'::text CHECK (status = ANY (ARRAY['completed'::text, 'error'::text, 'partial'::text])),
+  error_message text,
+  total_participants integer NOT NULL DEFAULT 0,
+  direct_voters integer NOT NULL DEFAULT 0,
+  delegators integer NOT NULL DEFAULT 0,
+  orphaned_chains integer NOT NULL DEFAULT 0,
+  longest_chain_length integer NOT NULL DEFAULT 0,
+  CONSTRAINT delegation_resolution_audit_pkey PRIMARY KEY (resolution_id),
+  CONSTRAINT delegation_resolution_audit_proposal_id_fkey FOREIGN KEY (proposal_id) REFERENCES public.proposals(proposal_id)
+);
+
+CREATE TABLE public.final_vote_results_audit (
+  result_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  proposal_id uuid NOT NULL UNIQUE,
+  vote_results jsonb NOT NULL,
+  computed_at timestamp with time zone NOT NULL DEFAULT now(),
+  computation_time_ms integer,
+  status text NOT NULL DEFAULT 'completed'::text CHECK (status = ANY (ARRAY['completed'::text, 'error'::text])),
+  error_message text,
+  total_voting_power integer NOT NULL DEFAULT 0,
+  total_votes_cast integer NOT NULL DEFAULT 0,
+  winning_option integer,
+  CONSTRAINT final_vote_results_audit_pkey PRIMARY KEY (result_id),
+  CONSTRAINT final_vote_results_audit_proposal_id_fkey FOREIGN KEY (proposal_id) REFERENCES public.proposals(proposal_id)
+);
+
+CREATE TABLE public.organizations (
+  organization_id text NOT NULL UNIQUE,
+  organization_name text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT organizations_pkey PRIMARY KEY (organization_id)
+);
+
+CREATE TABLE public.proposal_options (
+  proposal_id uuid NOT NULL,
+  option_number integer NOT NULL CHECK (option_number >= 1 AND option_number <= 10),
+  option_text text NOT NULL CHECK (length(TRIM(BOTH FROM option_text)) >= 3 AND length(TRIM(BOTH FROM option_text)) <= 200),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT proposal_options_pkey PRIMARY KEY (proposal_id, option_number),
+  CONSTRAINT proposal_options_proposal_id_fkey FOREIGN KEY (proposal_id) REFERENCES public.proposals(proposal_id)
+);
+
+CREATE TABLE public.proposals (
+  proposal_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  title text NOT NULL CHECK (length(TRIM(BOTH FROM title)) >= 10 AND length(TRIM(BOTH FROM title)) <= 100),
+  description text NOT NULL CHECK (length(TRIM(BOTH FROM description)) >= 50 AND length(TRIM(BOTH FROM description)) <= 1000),
+  voting_deadline timestamp with time zone NOT NULL,
+  organization_id text NOT NULL,
+  created_by text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT proposals_pkey PRIMARY KEY (proposal_id),
+  CONSTRAINT proposals_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(organization_id),
+  CONSTRAINT proposals_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(wallet_address)
+);
+
+CREATE TABLE public.redis_snapshots (
+  snapshot_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  proposal_id uuid NOT NULL,
+  redis_data jsonb NOT NULL CHECK (redis_data ? 'timestamp'::text AND redis_data ? 'votes'::text AND redis_data ? 'delegations'::text),
+  snapshot_type text NOT NULL CHECK (snapshot_type = ANY (ARRAY['hourly'::text, 'pre_calculation'::text, 'manual'::text])),
+  snapshot_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT redis_snapshots_pkey PRIMARY KEY (snapshot_id),
+  CONSTRAINT redis_snapshots_proposal_id_fkey FOREIGN KEY (proposal_id) REFERENCES public.proposals(proposal_id)
+);
+
+CREATE TABLE public.user_sessions (
+  jwt_token text NOT NULL,
+  wallet_address text NOT NULL,
+  expires_at timestamp with time zone NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT user_sessions_pkey PRIMARY KEY (jwt_token),
+  CONSTRAINT user_sessions_wallet_address_fkey FOREIGN KEY (wallet_address) REFERENCES public.users(wallet_address)
+);
+
+CREATE TABLE public.users (
+  wallet_address text NOT NULL UNIQUE,
+  unique_id text NOT NULL UNIQUE,
+  first_name text NOT NULL,
+  last_name text NOT NULL,
+  organization_id text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT users_pkey PRIMARY KEY (wallet_address),
+  CONSTRAINT users_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(organization_id)
+);
+
+CREATE TABLE public.vote_audit (
+  audit_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  proposal_id uuid NOT NULL,
+  user_wallet text NOT NULL,
+  organization_id text NOT NULL,
+  action_type text NOT NULL CHECK (action_type = ANY (ARRAY['vote'::text, 'remove_vote'::text, 'delegate'::text, 'remove_delegation'::text])),
+  target text,
+  target_wallet text,
+  timestamp timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT vote_audit_pkey PRIMARY KEY (audit_id),
+  CONSTRAINT vote_audit_proposal_id_fkey FOREIGN KEY (proposal_id) REFERENCES public.proposals(proposal_id),
+  CONSTRAINT vote_audit_user_wallet_fkey FOREIGN KEY (user_wallet) REFERENCES public.users(wallet_address),
+  CONSTRAINT vote_audit_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES public.organizations(organization_id),
+  CONSTRAINT vote_audit_target_wallet_fkey FOREIGN KEY (target_wallet) REFERENCES public.users(wallet_address)
+);
+```
 
 ## API Endpoints
 
