@@ -1,426 +1,249 @@
-# Cheshire Liquid Voting App
+# Cheshire
 
-A liquid voting platform with user profiles, JWT authentication, categories system, and proposal suggestions, built with React, TypeScript, Express, Upstash Redis, and PostgreSQL.
-
-## Architecture Overview
-
-- **Frontend**: React + TypeScript + Vite + TailwindCSS + Wagmi + RainbowKit
-- **Backend**: Express.js + Redis (Upstash recommended, local Redis alternative) + PostgreSQL (user data)
-- **Authentication**: JWT-based with wallet signing (SIWE pattern)
-- **Database**: PostgreSQL for user profiles, organizations, proposals, categories, and JWT sessions (Supabase recommended)
-- **Session Management**: JWT tokens with 36-hour expiration stored in PostgreSQL
+A liquid democracy platform that enables users to vote directly on proposals or delegate their voting power to trusted experts. Built with React, Node.js, PostgreSQL, and Redis.
 
 ## Features
 
-- **Wallet Authentication** - Connect MetaMask/WalletConnect and sign messages
-- **User Profile System** - One-time immutable profile setup
-- **JWT Session Management** - Secure token-based authentication with database validation
-- **Route Protection** - Enforce profile completion for protected routes
-- **Real-time Validation** - Unique ID and organization validation
-- **Organization Support** - Associate users with organizations
-- **Proposal Creation** - Create proposals with voting options and deadlines
-- **Proposal Management** - Organization scoped proposal system with validation
-- **Categories System** - Create and follow expertise categories for voting guidance
-- **Category Following** - Follow trusted experts and their categories
-- **Suggestion System** - Category creators can provide voting or delegation suggestions
-- **Liquid Democracy Foundation** - Framework for direct voting or expert delegation
-- **Redis Integration** - Redis ready for future voting calculations (Upstash or local)
-
-## Quick Setup
-
-### 1. Prerequisites
-
-- Node.js 18+
-- Redis database (Upstash recommended for easy setup, or local Redis)
-- PostgreSQL database (Supabase recommended for easy setup, or local PostgreSQL)
-
-### 2. Install Dependencies
-
-```bash
-# Install frontend dependencies
-cd cheshire
-npm install
-
-# Install server dependencies
-cd ../server
-npm install
-```
-
-### 3. Database Setup
-
-#### Redis Setup
-
-**Option 1: Upstash Redis (Recommended)**
-
-1. Create account at [Upstash](https://upstash.com/)
-2. Create a new Redis database
-3. Copy the REST API URL and token from the dashboard
-4. Add to server `.env` file (see Environment Variables section)
-
-**Option 2: Local Redis**
-
-```bash
-# Install Redis (macOS)
-brew install redis
-
-# Start Redis service
-brew services start redis
-
-# Verify Redis is running
-redis-cli ping
-# Should return: PONG
-```
-
-For local Redis, use different environment variables (see Environment Variables section).
-
-**Note:** The current implementation uses `@upstash/redis` package for Upstash. For local Redis, install `redis` package instead and update the connection code in `server.js`.
-
-#### PostgreSQL Setup with Supabase (Recommended)
-
-1. Create account at [Supabase](https://supabase.com)
-2. Create new project
-3. Go to **Table Editor** and create tables:
-
-**Organizations Table:**
-
-```sql
-CREATE TABLE organizations (
-  organization_id text PRIMARY KEY,
-  organization_name text NOT NULL,
-  created_at timestamptz DEFAULT NOW()
-);
-
--- Insert sample data
-INSERT INTO organizations (organization_id, organization_name) VALUES
-('bilgi_university', 'Bilgi University'),
-('fens', 'Faculty of Engineering and Natural Sciences'),
-('cmpe', 'Computer Engineering Department');
-```
-
-**Users Table:**
-
-```sql
-CREATE TABLE users (
-  wallet_address text PRIMARY KEY,
-  unique_id text UNIQUE NOT NULL,
-  first_name text NOT NULL,
-  last_name text NOT NULL,
-  organization_id text REFERENCES organizations(organization_id),
-  created_at timestamptz DEFAULT NOW(),
-  updated_at timestamptz DEFAULT NOW()
-);
-
--- Create index for organization queries (wallet_address and unique_id indexes are automatic)
-CREATE INDEX idx_users_organization_id ON users(organization_id);
-```
-
-**User Sessions Table (for JWT management):**
-
-```sql
-CREATE TABLE user_sessions (
-  jwt_token TEXT PRIMARY KEY,
-  wallet_address TEXT NOT NULL REFERENCES users(wallet_address) ON DELETE CASCADE,
-  expires_at TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create indexes for faster queries
-CREATE INDEX idx_user_sessions_wallet_address ON user_sessions(wallet_address);
-CREATE INDEX idx_user_sessions_expires_at ON user_sessions(expires_at);
-```
-
-**Proposals Table:**
-
-```sql
-CREATE TABLE proposals (
-  proposal_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  title TEXT NOT NULL CHECK (length(trim(title)) >= 10 AND length(trim(title)) <= 100),
-  description TEXT NOT NULL CHECK (length(trim(description)) >= 50 AND length(trim(description)) <= 1000),
-  voting_deadline TIMESTAMPTZ NOT NULL,
-  organization_id TEXT NOT NULL REFERENCES organizations(organization_id),
-  created_by TEXT NOT NULL REFERENCES users(wallet_address),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-
-  -- Constraints
-  CONSTRAINT voting_deadline_future CHECK (voting_deadline > created_at + INTERVAL '1 hour')
-);
-
--- Create indexes for performance
-CREATE INDEX idx_proposals_organization_id ON proposals(organization_id);
-CREATE INDEX idx_proposals_created_by ON proposals(created_by);
-CREATE INDEX idx_proposals_voting_deadline ON proposals(voting_deadline);
-CREATE INDEX idx_proposals_created_at ON proposals(created_at);
-```
-
-**Proposal Options Table:**
-
-```sql
-CREATE TABLE proposal_options (
-  proposal_id UUID NOT NULL REFERENCES proposals(proposal_id) ON DELETE CASCADE,
-  option_number INTEGER NOT NULL CHECK (option_number >= 1 AND option_number <= 10),
-  option_text TEXT NOT NULL CHECK (length(trim(option_text)) >= 3 AND length(trim(option_text)) <= 200),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-
-  PRIMARY KEY (proposal_id, option_number),
-  UNIQUE(proposal_id, option_text)
-);
-
--- Create index for faster queries
-CREATE INDEX idx_proposal_options_proposal_id ON proposal_options(proposal_id);
-```
-
-**Categories Table:**
-
-```sql
-CREATE TABLE categories (
-  category_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  title TEXT NOT NULL CHECK (length(trim(title)) >= 5 AND length(trim(title)) <= 30),
-  description TEXT NOT NULL CHECK (length(trim(description)) >= 50 AND length(trim(description)) <= 1000),
-  organization_id TEXT NOT NULL REFERENCES organizations(organization_id),
-  created_by TEXT NOT NULL REFERENCES users(wallet_address),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-
-  -- Unique category titles per organization
-  UNIQUE(organization_id, title)
-);
-
--- Create indexes for performance
-CREATE INDEX idx_categories_organization_id ON categories(organization_id);
-CREATE INDEX idx_categories_creator_wallet ON categories(created_by);
-```
-
-**Category Followers Table:**
-
-```sql
-CREATE TABLE category_followers (
-  category_id UUID NOT NULL REFERENCES categories(category_id) ON DELETE CASCADE,
-  follower_wallet TEXT NOT NULL REFERENCES users(wallet_address) ON DELETE CASCADE,
-  followed_at TIMESTAMPTZ DEFAULT NOW(),
-
-  PRIMARY KEY (category_id, follower_wallet)
-);
-
--- Create indexes for performance
-CREATE INDEX idx_category_followers_category_id ON category_followers(category_id);
-CREATE INDEX idx_category_followers_follower_wallet ON category_followers(follower_wallet);
-```
-
-**Category Suggestions Table:**
-
-```sql
-CREATE TABLE category_suggestions (
-  suggestion_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  category_id UUID NOT NULL REFERENCES categories(category_id) ON DELETE CASCADE,
-  proposal_id UUID NOT NULL REFERENCES proposals(proposal_id) ON DELETE CASCADE,
-  suggestion_type TEXT NOT NULL CHECK (suggestion_type = ANY (ARRAY['delegate', 'vote_option'])),
-  target_user TEXT REFERENCES users(unique_id),
-  target_option_number INTEGER,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-
-  -- Business logic constraints
-  CONSTRAINT category_suggestions_check CHECK (
-    (suggestion_type = 'vote_option' AND target_user IS NULL AND target_option_number IS NOT NULL AND target_option_number > 0)
-    OR 
-    (suggestion_type = 'delegate' AND target_user IS NOT NULL AND target_option_number IS NULL)
-  ),
-
-  -- One suggestion per category per proposal
-  UNIQUE(category_id, proposal_id),
-
-  -- Foreign key to proposal options for vote suggestions
-  FOREIGN KEY (proposal_id, target_option_number) REFERENCES proposal_options(proposal_id, option_number)
-);
-
--- Create indexes for performance
-CREATE INDEX idx_category_suggestions_category_id ON category_suggestions(category_id);
-CREATE INDEX idx_category_suggestions_proposal_id ON category_suggestions(proposal_id);
-```
-
-4. Get Supabase credentials:
-   - Go to **Settings** → **API**
-   - Copy Project URL and service_role key
-
-#### Alternative: Local PostgreSQL
-
-Any PostgreSQL database can be used instead of Supabase. Update the connection details in environment variables and modify `database/supabase.js` to use a standard PostgreSQL client.
-
-### 4. Environment Variables
-
-#### Frontend (.env in cheshire/)
-
-```env
-VITE_INFURA_API_KEY=your_infura_api_key_here
-VITE_WALLETCONNECT_PROJECT_ID=your_walletconnect_project_id_here
-```
-
-#### Server (.env in server/)
-
-```env
-# Node Environment
-NODE_ENV=development
-
-# CORS Configuration
-FRONTEND_URL=http://localhost:5173
-
-# Supabase Configuration (PostgreSQL + JWT sessions)
-SUPABASE_URL=https://project-id.supabase.co
-SUPABASE_SERVICE_KEY=service_role_key_here
-
-# Redis Configuration - Option 1: Upstash (Recommended)
-UPSTASH_REDIS_REST_URL=https://redis-id.upstash.io
-UPSTASH_REDIS_REST_TOKEN=upstash_token_here
-
-# Redis Configuration - Option 2: Local Redis (Alternative)
-# REDIS_URL=redis://localhost:6379
-# REDIS_PASSWORD=
-
-# JWT Secret (defaults to SUPABASE_SERVICE_KEY when using Supabase)
-# JWT_SECRET=custom_jwt_secret_here
-```
-
-### 5. Run the Application
-
-```bash
-# Terminal 1: Start the server
-cd server
-npm run dev
-
-# Terminal 2: Start the frontend
-cd cheshire
-npm run dev
-```
-
-The app will be available at:
-
-- Frontend: http://localhost:5173
-- Server: http://localhost:8080
-
-## User Flow
-
-### New Users
-
-1. **Connect Wallet** - Connect MetaMask or other wallet
-2. **Complete Setup** - Fill out profile form (one-time only)
-3. **Sign In** - Sign message to get JWT token
-4. **Access App** - Full access to proposals, categories, and suggestion creation
-
-### Existing Users
-
-1. **Connect Wallet** - Connect same wallet as before
-2. **Sign In** - Authenticate to get fresh JWT token
-3. **Immediate Access** - Direct access to app features
-
-### Category Expert Workflow
-
-1. **Create Category** - Define expertise area with title and description
-2. **Create Suggestions** - Provide voting or delegation recommendations on proposals
-3. **Build Following** - Gain followers interested in the expertise area
-
-### Category Follower Workflow
-
-1. **Browse Categories** - Explore available expertise categories
-2. **Follow Categories** - Subscribe to trusted experts
-3. **View Suggestions** - See recommendations on proposal detail pages
-4. **Apply Suggestions** - Use expert guidance for voting decisions (future feature)
-
-### Protected Routes
-
-- `/proposals` - Requires JWT authentication + completed profile
-- `/categories` - Requires JWT authentication + completed profile
-- `/profile` - Display user profile information
-- `/create-proposal` - Create new proposals (requires organization membership)
-- `/setup` - One-time profile setup (redirects if already completed)
+- **Liquid Voting System**: Vote directly or delegate to experts with automatic chain resolution
+- **Category Based Expertise**: Follow category experts for voting recommendations and guidance
+- **Organization Management**: Secure organization based access with JWT authentication
+- **Proposal Management**: Create, view, and participate in organizational decision making
+- **Profile System**: User profiles with unique identifiers for delegation
+- **Real Time Processing**: Redis backed voting system with automated delegation resolution
+- **Audit Trails**: Complete transparency with comprehensive voting and delegation logging
+- **Backup Systems**: Automated data backup and disaster recovery capabilities
+
+## Technology Stack
+
+### Frontend
+- React 19 with TypeScript
+- Tailwind CSS for styling
+- Vite for build tooling
+- React Router for navigation
+- Wagmi + RainbowKit for wallet integration
+- TanStack Query for state management
+
+### Backend
+- Node.js with Express
+- PostgreSQL via Supabase
+- Upstash Redis for voting calculations
+- JWT authentication
+- CORS enabled API
+
+### Infrastructure
+- Supabase for database and real time features
+- Upstash Redis for liquid voting operations
+- Environment based configuration
+
+## Architecture
+
+### Liquid Democracy Implementation
+
+The liquid voting system allows users to:
+- **Vote Directly**: Cast votes on proposals they understand or care about
+- **Delegate Power**: Assign voting power to trusted experts in specific areas
+- **Chain Resolution**: Automatic delegation chain following with cycle detection
+- **Weighted Counting**: Final vote tallies respect delegation chains and voting power
+
+### Data Flow
+1. **Vote Storage**: Redis stores real time voting and delegation data
+2. **Chain Resolution**: Automated processing resolves delegation chains using graph algorithms
+3. **Vote Counting**: Final tallies calculated with proper voting power weights
+4. **Audit Trail**: All actions logged to PostgreSQL for transparency
+5. **Backup System**: Hourly Redis snapshots stored for disaster recovery
+
+### Database Schema
+
+#### Core Tables
+- `users` - User profiles with unique identifiers
+- `organizations` - Organization management
+- `proposals` - Proposal data with voting deadlines
+- `proposal_options` - Voting options for each proposal
+- `categories` - Expert categories for delegation guidance
+- `category_followers` - User category subscriptions
+- `category_suggestions` - Expert voting recommendations
+
+#### Liquid Voting Tables
+- `vote_audit` - Complete audit trail for all voting actions
+- `delegation_resolution_audit` - Delegation chain resolution results
+- `final_vote_results_audit` - Final vote counting with metadata
+- `redis_snapshots` - Redis backup system for disaster recovery
+- `vote_results` - Computed vote tallies per proposal option
+
+#### Authentication
+- `user_sessions` - JWT session management
+- Foreign key constraints ensure data integrity
 
 ## API Endpoints
 
-### Authentication (JWT-based)
-
-- `GET /api/auth/nonce` - Get signing nonce
-- `POST /api/auth/signin` - Sign in and get JWT token
-- `GET /api/auth/me` - Check current JWT token
-- `POST /api/auth/signout` - Invalidate JWT token
-- `GET /api/auth/check-user?address=0x...` - Check if user has completed profile
+### Authentication
+- `GET /api/auth/nonce` - Generate signing nonce
+- `GET /api/auth/check-user` - Check user profile status
+- `POST /api/auth/signin` - JWT authentication
+- `GET /api/auth/me` - Get current user
+- `POST /api/auth/signout` - Invalidate session
 
 ### User Management
-
-- `GET /api/user/exists?address=0x...` - Check if user exists
-- `GET /api/user/profile` - Get user profile data (JWT required)
+- `GET /api/user/exists` - Check if user exists
+- `GET /api/user/unique-id/check` - Validate unique ID availability
+- `GET /api/user/organization/check` - Verify organization exists
+- `GET /api/user/organizations` - List available organizations
+- `GET /api/user/profile` - Get user profile
 - `POST /api/user/create` - Create new user profile
-- `GET /api/user/unique-id/check?id=...` - Check unique ID availability
-- `GET /api/user/organization/check?id=...` - Check organization exists
-- `GET /api/user/organizations` - List all organizations
-- `GET /api/user/organization/users` - List organization members (JWT required)
+- `GET /api/user/organization/users` - Get organization members
 
-### Proposal Management (JWT required)
+### Proposals
+- `POST /api/proposals/create` - Create new proposal
+- `GET /api/proposals/my-proposals` - Get user proposals
+- `GET /api/proposals/organization` - Get organization proposals
+- `GET /api/proposals/can-create` - Check creation permissions
+- `GET /api/proposals/:id` - Get proposal details
+- `GET /api/proposals/:id/suggestions` - Get category suggestions
 
-- `POST /api/proposals/create` - Create new proposal with voting options
-- `GET /api/proposals/my-proposals` - Get user's created proposals
-- `GET /api/proposals/organization` - Get organization's proposals
-- `GET /api/proposals/can-create` - Check if user can create proposals
-- `GET /api/proposals/:id` - Get proposal by ID
-- `GET /api/proposals/:id/suggestions` - Get suggestions for proposal from followed categories
+### Liquid Voting
+- `POST /api/proposals/:id/vote` - Cast direct vote
+- `DELETE /api/proposals/:id/vote` - Remove vote
+- `POST /api/proposals/:id/delegate` - Set delegation
+- `DELETE /api/proposals/:id/delegate` - Remove delegation
+- `GET /api/proposals/:id/voting-status` - Get user voting status
 
-### Category Management (JWT required)
-
-- `GET /api/categories/organization` - List organization categories with pagination
+### Categories
+- `GET /api/categories/organization` - Get organization categories
 - `POST /api/categories/create` - Create new category
 - `GET /api/categories/:id` - Get category details
-- `POST /api/categories/:id/follow` - Follow a category
-- `DELETE /api/categories/:id/follow` - Unfollow a category
-- `POST /api/categories/:id/suggest` - Create suggestion for a proposal
+- `POST /api/categories/:id/follow` - Follow category
+- `DELETE /api/categories/:id/follow` - Unfollow category
+- `POST /api/categories/:id/suggest` - Create voting suggestion
 
-### System Status
+### System
+- `GET /api/status` - System health check
+- `GET /api/debug/redis` - Redis connection status
 
-- `GET /api/status` - System health check (PostgreSQL + Redis)
-- `GET /api/debug/redis` - Redis connection details
+## Setup Instructions
 
-## External Services Required
+### Prerequisites
+- Node.js 18+
+- PostgreSQL database (Supabase recommended)
+- Upstash Redis account
+- Infura API key
+- WalletConnect Project ID
 
-1. **WalletConnect Project ID** - Get from [WalletConnect Cloud](https://cloud.walletconnect.com/)
-2. **Infura API Key** - Get from [Infura](https://infura.io/)
-3. **PostgreSQL Database** - [Supabase](https://supabase.com/) recommended or any PostgreSQL instance
-4. **Redis Database** - [Upstash](https://upstash.com/) recommended for voting calculations, or local Redis
+### Environment Configuration
 
-## Development Notes
+#### Backend (.env)
+```bash
+# Redis Configuration (Upstash)
+UPSTASH_REDIS_REST_URL=https://your-redis-url.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your_redis_token
 
-### Data Immutability
-- User profile data is **immutable** after creation
-- Proposals are **immutable** after creation (no editing allowed)
-- Categories are **immutable** after creation
-- Suggestions are **immutable** after creation
+# Session Configuration
+SESSION_TTL=129600
+FRONTEND_URL=http://localhost:5173
 
-### Authentication System
-- JWT tokens expire after 36 hours and are stored in PostgreSQL for validation
-- Expired JWT sessions are automatically cleaned up every 12 hours
-- All protected routes require valid JWT tokens via Authorization headers
-- PostgreSQL database can be local, cloud-hosted, or Supabase
-- When using Supabase, the service_role key bypasses Row Level Security for server operations
-- JWT authentication uses SUPABASE_SERVICE_KEY as the signing secret when using Supabase
+# Supabase Configuration
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_KEY=your_service_key
 
-### Business Logic Constraints
-- Proposals are organization scoped (users can only create proposals for their organization)
-- Categories are organization scoped (users can only view and follow categories from their organization)
-- Voting deadlines must be at least 1 hour from creation time
-- Suggestions cannot be created within 1 hour of proposal voting deadline
-- One suggestion per category per proposal (enforced at database level)
-- Category titles must be unique within each organization
+# JWT Secret (optional, defaults to SUPABASE_SERVICE_KEY)
+JWT_SECRET=your_jwt_secret
+```
 
-### Performance Considerations
-- Redis is used for voting calculations, not authentication (which uses JWT tokens)
-- Local Redis or Upstash Redis can be used depending on deployment preference
-- Database indexes optimize common query patterns for proposals, categories, and suggestions
-- Foreign key constraints ensure referential integrity across all tables
-- Check constraints enforce business rules at the database level
+#### Frontend (.env)
+```bash
+# Backend API URL
+VITE_BACKEND_URL=http://localhost:8080
 
-### State Management
-- Wallet address changes automatically clear auth state and redirect to clean connection
-- Category follow states update in real time across components
-- Search and pagination state persists via URL parameters
-- Authentication state is managed through Zustand store with JWT persistence
+# Infura Configuration
+VITE_INFURA_API_KEY=your_infura_key
 
-### Liquid Democracy Foundation
-- Categories system provides the framework for expertise-based delegation
-- Suggestion system enables expert guidance without forced delegation
-- Future voting system will integrate with suggestion recommendations
-- Direct voting and delegation options will be available on proposal pages
-- Redis backend is prepared for complex vote counting and delegation calculations
+# WalletConnect Configuration
+VITE_WALLETCONNECT_PROJECT_ID=your_project_id
+```
+
+### Database Setup
+
+1. Create a Supabase project
+2. Run the database migrations to create all required tables
+3. Set up Row Level Security policies if needed
+4. Configure foreign key constraints for data integrity
+
+### Redis Setup
+
+1. Create an Upstash Redis database
+2. Copy the REST URL and token to your environment
+3. The system will automatically handle key patterns and TTL management
+4. Backup system will create hourly snapshots automatically
+
+### Installation
+
+#### Backend
+```bash
+cd server
+npm install
+npm run dev
+```
+
+#### Frontend
+```bash
+cd cheshire
+npm install
+npm run dev
+```
+
+### Development Workflow
+
+1. **Wallet Connection**: Users connect Ethereum wallets via RainbowKit
+2. **Profile Creation**: Complete user profile with organization membership
+3. **Authentication**: Sign message for JWT token authentication
+4. **Proposal Participation**: Vote directly or delegate to experts
+5. **Category Following**: Subscribe to expert categories for guidance
+6. **Liquid Democracy**: System automatically resolves delegation chains
+
+## Liquid Voting Process
+
+### Vote Casting
+1. User selects proposal option
+2. Vote stored in Redis with rate limiting
+3. Any existing delegation automatically removed
+4. Action logged to audit trail
+
+### Delegation
+1. User selects expert by unique ID
+2. Cycle detection prevents circular delegations
+3. Chain length validation ensures system performance
+4. Delegation stored in Redis with audit logging
+
+### Chain Resolution
+1. Automated processing every 24 hours for expired proposals
+2. Graph traversal algorithms resolve delegation chains
+3. Voting power calculated based on chain endpoints
+4. Results stored in PostgreSQL audit tables
+
+### Final Counting
+1. Weighted vote tallies respect delegation chains
+2. Each user contributes exactly one unit of voting power
+3. Final results include detailed voter breakdowns
+4. Winning options determined by highest weighted totals
+
+## Security Features
+
+- **Cycle Detection**: Prevents circular delegation chains
+- **Rate Limiting**: 60 second cooldown between voting actions
+- **Organization Isolation**: Users can only interact within their organization
+- **Audit Trails**: Complete logging of all voting and delegation actions
+- **Data Backup**: Hourly Redis snapshots for disaster recovery
+- **JWT Authentication**: Secure session management with token expiration
+- **Input Validation**: Comprehensive validation on all user inputs
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.
