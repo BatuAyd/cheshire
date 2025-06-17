@@ -589,7 +589,7 @@ router.delete('/:id/delegate', requireJwtAuth, async (req, res) => {
 });
 
 /**
- * Get user's current voting status for a proposal
+ * Get user's current voting status for a proposal (works for both active and expired)
  * GET /api/proposals/:id/voting-status
  */
 router.get('/:id/voting-status', requireJwtAuth, async (req, res) => {
@@ -603,15 +603,23 @@ router.get('/:id/voting-status', requireJwtAuth, async (req, res) => {
       return res.status(400).json({ error: 'Invalid proposal ID format' });
     }
 
-    // Validate proposal access
-    const validation = await validateProposalAccess(proposalId, userWallet);
-    if (!validation.valid) {
-      return res.status(validation.status).json({ error: validation.error });
+    // Use a custom validation that doesn't check deadline for status endpoint
+    const proposal = await proposalDb.getById(proposalId);
+    if (!proposal) {
+      return res.status(404).json({ error: 'Proposal not found' });
     }
 
-    const { proposal } = validation;
+    // Check if user is in the same organization
+    const user = await userDb.getByWallet(userWallet);
+    if (!user || !user.organization_id) {
+      return res.status(403).json({ error: 'User not found or not in organization' });
+    }
 
-    // Get user's current status
+    if (user.organization_id !== proposal.organization_id) {
+      return res.status(403).json({ error: 'Access denied - different organization' });
+    }
+
+    // Get user's current status (works for both active and expired proposals)
     const votingOps = getVotingOps();
     const userStatus = await votingOps.getUserStatus(proposalId, userWallet);
 
@@ -638,28 +646,29 @@ router.get('/:id/voting-status', requireJwtAuth, async (req, res) => {
       selectedOption = proposal.options?.find(opt => opt.option_number === userStatus.voted_option);
     }
 
-    // Check rate limiting status
-    const inCooldown = await checkRateLimit(userWallet, proposalId);
-
-    // Calculate time remaining
+    // Calculate time remaining and active status
     const now = new Date();
     const deadline = new Date(proposal.voting_deadline);
     const timeRemainingMs = deadline.getTime() - now.getTime();
     const timeRemaining = Math.max(0, Math.floor(timeRemainingMs / 1000)); // seconds
+    const isActive = timeRemaining > 0;
+
+    // Check rate limiting status (only relevant for active proposals)
+    const inCooldown = isActive ? await checkRateLimit(userWallet, proposalId) : false;
 
     res.status(200).json({
       proposal_id: proposalId,
       proposal_title: proposal.title,
       voting_deadline: proposal.voting_deadline,
       time_remaining_seconds: timeRemaining,
-      is_active: timeRemaining > 0,
+      is_active: isActive,
       user_status: {
         has_voted: userStatus.has_voted,
         voted_option: userStatus.voted_option,
         selected_option: selectedOption,
         has_delegated: userStatus.has_delegated,
         delegate_info: delegateInfo,
-        can_act: !inCooldown && timeRemaining > 0,
+        can_act: !inCooldown && isActive, // Can only act if active and not in cooldown
         cooldown_active: inCooldown
       },
       options: proposal.options || []

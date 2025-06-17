@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { apiFetch } from "../../utils/api";
 import type { Proposal } from "../../utils/proposalUtils";
 
@@ -32,12 +32,29 @@ interface Category {
   created_by: string;
 }
 
+interface VotingStatus {
+  has_voted: boolean;
+  has_delegated: boolean;
+  voted_option?: number;
+  delegate_info?: {
+    unique_id: string;
+    name: string;
+  };
+  selected_option?: {
+    option_number: number;
+    option_text: string;
+  };
+  can_act: boolean;
+  cooldown_active: boolean;
+}
+
 interface SuggestionDisplayProps {
   suggestions: Suggestion[];
   loading: boolean;
   proposal: Proposal;
   canCreateSuggestions: boolean;
   onCreateSuggestion: () => void;
+  userVotingStatus?: VotingStatus | null; // Current user's voting status
 }
 
 const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
@@ -46,15 +63,36 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
   proposal,
   canCreateSuggestions,
   onCreateSuggestion,
+  userVotingStatus,
 }) => {
   const [userCategories, setUserCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [applyingStates, setApplyingStates] = useState<Record<string, boolean>>(
     {}
   );
-  const [appliedStates, setAppliedStates] = useState<Record<string, boolean>>(
-    {}
-  );
+
+  // Helper function to determine if a suggestion is applied based on current voting status
+  const isSuggestionApplied = useMemo(() => {
+    return (suggestion: Suggestion): boolean => {
+      if (!userVotingStatus) return false;
+
+      if (suggestion.suggestion_type === "vote_option") {
+        // For vote suggestions: check if user voted for the suggested option
+        return (
+          userVotingStatus.has_voted &&
+          userVotingStatus.voted_option === suggestion.target_option_number
+        );
+      } else if (suggestion.suggestion_type === "delegate") {
+        // For delegate suggestions: check if user delegated to the suggested person
+        return (
+          userVotingStatus.has_delegated &&
+          userVotingStatus.delegate_info?.unique_id === suggestion.target_user
+        );
+      }
+
+      return false;
+    };
+  }, [userVotingStatus]);
 
   // Load user's categories to check if they can create suggestions
   useEffect(() => {
@@ -115,12 +153,6 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
           alert(
             `✅ Successfully delegated your vote to ${targetName} (@${suggestion.target_user})`
           );
-
-          // Mark as applied
-          setAppliedStates((prev) => ({
-            ...prev,
-            [suggestion.suggestion_id]: true,
-          }));
         } else {
           // Handle specific errors
           if (response.status === 429) {
@@ -165,12 +197,6 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
             `Option ${suggestion.target_option_number}`;
 
           alert(`✅ Successfully voted for: "${optionText}"`);
-
-          // Mark as applied
-          setAppliedStates((prev) => ({
-            ...prev,
-            [suggestion.suggestion_id]: true,
-          }));
         } else {
           // Handle specific errors
           if (response.status === 429) {
@@ -199,7 +225,6 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
         }`
       );
     } finally {
-      // Clear loading state
       setApplyingStates((prev) => ({
         ...prev,
         [suggestion.suggestion_id]: false,
@@ -207,14 +232,11 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
     }
   };
 
-  const formatSuggestionTime = (created_at: string) => {
-    return new Date(created_at).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  // Check if user can create suggestions (must have created categories)
+  const canUserCreateSuggestions = useMemo(() => {
+    if (loadingCategories) return false;
+    return userCategories.some((cat) => cat.created_by === proposal.created_by);
+  }, [userCategories, loadingCategories, proposal.created_by]);
 
   // Check if voting is still active
   const isVotingActive = () => {
@@ -223,63 +245,101 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
     return now < deadline;
   };
 
-  // Check if user owns any categories (can create suggestions)
-  const userOwnsCategories = userCategories.length > 0;
+  // Format suggestion creation time
+  const formatSuggestionTime = (createdAt: string) => {
+    const now = new Date();
+    const created = new Date(createdAt);
+    const diffHours = Math.floor(
+      (now.getTime() - created.getTime()) / (1000 * 60 * 60)
+    );
+
+    if (diffHours < 1) {
+      return "Just now";
+    } else if (diffHours === 1) {
+      return "1 hour ago";
+    } else if (diffHours < 24) {
+      return `${diffHours} hours ago`;
+    } else {
+      const diffDays = Math.floor(diffHours / 24);
+      return diffDays === 1 ? "1 day ago" : `${diffDays} days ago`;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-neutral-800">
+            User Suggestions
+          </h3>
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="bg-white border border-neutral-200 rounded-lg p-6 animate-pulse"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <div className="h-4 bg-neutral-200 rounded w-32 mb-2"></div>
+                  <div className="h-3 bg-neutral-200 rounded w-20"></div>
+                </div>
+                <div className="h-8 bg-neutral-200 rounded w-16"></div>
+              </div>
+              <div className="space-y-2">
+                <div className="h-4 bg-neutral-200 rounded w-full"></div>
+                <div className="h-4 bg-neutral-200 rounded w-3/4"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Sort suggestions: vote suggestions first, then delegate suggestions
+  const sortedSuggestions = [...suggestions].sort((a, b) => {
+    if (
+      a.suggestion_type === "vote_option" &&
+      b.suggestion_type === "delegate"
+    ) {
+      return -1;
+    }
+    if (
+      a.suggestion_type === "delegate" &&
+      b.suggestion_type === "vote_option"
+    ) {
+      return 1;
+    }
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
 
   return (
-    <div>
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-neutral-800">
-          Category Suggestions
+          User Suggestions ({suggestions.length})
         </h3>
 
-        {/* Create Suggestion Button - Only show if user owns categories and can create suggestions */}
-        {userOwnsCategories && canCreateSuggestions && (
+        {/* Create Suggestion Button */}
+        {canCreateSuggestions && canUserCreateSuggestions && (
           <button
             onClick={onCreateSuggestion}
-            disabled={loadingCategories}
-            className="px-4 py-2 bg-orange-400 text-white rounded-lg font-medium transition-all hover:bg-orange-500 hover:shadow-md active:scale-95 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+            className="px-4 py-2 bg-orange-400 text-white rounded-lg font-medium transition-all hover:bg-orange-500 hover:shadow-md active:scale-95 text-sm cursor-pointer"
           >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
             Create Suggestion
           </button>
         )}
       </div>
 
-      {/* Content */}
-      {loading ? (
-        // Loading state
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-neutral-50 rounded-lg p-4 animate-pulse">
-              <div className="flex items-center justify-between mb-3">
-                <div className="h-4 bg-neutral-200 rounded w-1/3"></div>
-                <div className="h-6 bg-neutral-200 rounded w-16"></div>
-              </div>
-              <div className="h-4 bg-neutral-200 rounded w-2/3 mb-2"></div>
-              <div className="h-3 bg-neutral-200 rounded w-1/4"></div>
-            </div>
-          ))}
-        </div>
-      ) : suggestions.length === 0 ? (
+      {/* Suggestions List or Empty State */}
+      {sortedSuggestions.length === 0 ? (
         // Empty state
-        <div className="bg-neutral-50 rounded-lg p-8 text-center">
-          <div className="w-12 h-12 bg-neutral-200 rounded-full flex items-center justify-center mx-auto mb-4">
+        <div className="bg-white border border-neutral-200 rounded-lg p-8 text-center">
+          <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg
-              className="w-6 h-6 text-neutral-400"
+              className="w-8 h-8 text-neutral-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -292,14 +352,26 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
               />
             </svg>
           </div>
-          <h4 className="text-lg font-medium text-neutral-700 mb-2">
-            No suggestions yet
+          <h4 className="text-lg font-medium text-neutral-800 mb-2">
+            No Suggestions Yet
           </h4>
-          <p className="text-neutral-600 text-sm">
-            {userOwnsCategories && canCreateSuggestions
-              ? "Be the first to create a suggestion for this proposal!"
-              : "Categories you follow haven't made suggestions for this proposal yet."}
+          <p className="text-neutral-600 mb-6">
+            {userCategories.length === 0
+              ? "Follow some categories to see user suggestions here."
+              : suggestions.length === 0
+              ? "Categories you follow haven't made suggestions for this proposal yet."
+              : "Be the first to create a suggestion for this proposal!"}
           </p>
+
+          {/* Create suggestion CTA for eligible users */}
+          {canCreateSuggestions && canUserCreateSuggestions && (
+            <button
+              onClick={onCreateSuggestion}
+              className="px-6 py-3 bg-orange-400 text-white rounded-lg font-medium transition-all hover:bg-orange-500 hover:shadow-md active:scale-95"
+            >
+              Create First Suggestion
+            </button>
+          )}
 
           {/* Info about suggestions deadline */}
           {!canCreateSuggestions && (
@@ -314,16 +386,21 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
       ) : (
         // Suggestions list
         <div className="space-y-4">
-          {suggestions.map((suggestion) => {
+          {sortedSuggestions.map((suggestion) => {
             const isApplying =
               applyingStates[suggestion.suggestion_id] || false;
-            const isApplied = appliedStates[suggestion.suggestion_id] || false;
+            const isApplied = isSuggestionApplied(suggestion);
             const votingActive = isVotingActive();
+            const cooldownActive = userVotingStatus?.cooldown_active || false;
 
             return (
               <div
                 key={suggestion.suggestion_id}
-                className="bg-white border border-neutral-200 rounded-lg p-6 hover:shadow-md transition-shadow"
+                className={`bg-white border rounded-lg p-6 hover:shadow-md transition-all ${
+                  isApplied
+                    ? "border-green-200 bg-green-50/30"
+                    : "border-neutral-200"
+                }`}
               >
                 {/* Header with category and apply button */}
                 <div className="flex items-start justify-between mb-4">
@@ -336,14 +413,21 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
                     </p>
                   </div>
 
-                  {/* Apply Button with different states */}
+                  {/* Apply Button with enhanced states */}
                   <button
                     onClick={() => handleApplySuggestion(suggestion)}
-                    disabled={isApplying || isApplied || !votingActive}
+                    disabled={
+                      isApplying ||
+                      isApplied ||
+                      !votingActive ||
+                      (cooldownActive && !isApplied)
+                    }
                     className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
                       isApplied
-                        ? "bg-green-100 text-green-700 cursor-not-allowed"
+                        ? "bg-green-100 text-green-700 cursor-not-allowed border border-green-200"
                         : !votingActive
+                        ? "bg-neutral-100 text-neutral-500 cursor-not-allowed"
+                        : cooldownActive && !isApplied
                         ? "bg-neutral-100 text-neutral-500 cursor-not-allowed"
                         : isApplying
                         ? "bg-blue-300 text-white cursor-not-allowed"
@@ -372,6 +456,8 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
                       </div>
                     ) : !votingActive ? (
                       "Voting Ended"
+                    ) : cooldownActive && !isApplied ? (
+                      "Apply"
                     ) : (
                       "Apply"
                     )}
@@ -383,9 +469,15 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
                   {/* Icon based on suggestion type */}
                   <div className="flex-shrink-0 mt-1">
                     {suggestion.suggestion_type === "delegate" ? (
-                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          isApplied ? "bg-green-100" : "bg-purple-100"
+                        }`}
+                      >
                         <svg
-                          className="w-4 h-4 text-purple-600"
+                          className={`w-4 h-4 ${
+                            isApplied ? "text-green-600" : "text-purple-600"
+                          }`}
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -399,9 +491,15 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
                         </svg>
                       </div>
                     ) : (
-                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          isApplied ? "bg-green-100" : "bg-green-100"
+                        }`}
+                      >
                         <svg
-                          className="w-4 h-4 text-green-600"
+                          className={`w-4 h-4 ${
+                            isApplied ? "text-green-600" : "text-green-600"
+                          }`}
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -423,40 +521,27 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
                       <div>
                         <p className="text-neutral-800 mb-1">
                           <span className="font-medium">Delegate to:</span>{" "}
-                          {suggestion.users ? (
-                            <>
-                              {suggestion.users.first_name}{" "}
-                              {suggestion.users.last_name}{" "}
-                              <span className="text-neutral-500">
-                                (@{suggestion.target_user})
-                              </span>
-                            </>
-                          ) : (
-                            <span className="text-neutral-500">
-                              @{suggestion.target_user}
-                            </span>
-                          )}
+                          {suggestion.users
+                            ? `${suggestion.users.first_name} ${suggestion.users.last_name} (@${suggestion.target_user})`
+                            : `@${suggestion.target_user}`}
                         </p>
                         <p className="text-neutral-600 text-sm">
-                          Let this expert vote on your behalf for this proposal.
+                          Let this user vote on your behalf
                         </p>
                       </div>
                     ) : (
                       <div>
                         <p className="text-neutral-800 mb-1">
-                          <span className="font-medium">Vote for:</span>{" "}
-                          {suggestion.proposal_option ? (
-                            <span className="font-medium text-blue-600">
-                              {suggestion.proposal_option.option_text}
-                            </span>
-                          ) : (
-                            <span className="font-medium text-blue-600">
-                              Option {suggestion.target_option_number}
-                            </span>
-                          )}
+                          <span className="font-medium">Vote for:</span> Option{" "}
+                          {suggestion.target_option_number}
                         </p>
+                        {suggestion.proposal_option && (
+                          <p className="text-neutral-600 text-sm mb-2">
+                            "{suggestion.proposal_option.option_text}"
+                          </p>
+                        )}
                         <p className="text-neutral-600 text-sm">
-                          This category recommends choosing this option.
+                          User recommends this choice
                         </p>
                       </div>
                     )}
@@ -468,31 +553,16 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
         </div>
       )}
 
-      {/* Info box about suggestions */}
-      <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-start">
-          <svg
-            className="w-5 h-5 text-blue-500 mt-0.5 mr-3 flex-shrink-0"
-            fill="currentColor"
-            viewBox="0 0 20 20"
-          >
-            <path
-              fillRule="evenodd"
-              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-              clipRule="evenodd"
-            />
-          </svg>
-          <div>
-            <h4 className="font-medium text-blue-800 mb-1">
-              About Category Suggestions
-            </h4>
-            <p className="text-blue-700 text-sm">
-              These suggestions come from categories you follow. Click "Apply"
-              to quickly vote or delegate based on expert recommendations.
-              {!isVotingActive() && " Voting has ended for this proposal."}
-            </p>
-          </div>
-        </div>
+      {/* Info section */}
+      <div className="bg-neutral-50 border border-neutral-200 rounded-lg p-4">
+        <h4 className="text-sm font-medium text-neutral-800 mb-2">
+          About User Suggestions
+        </h4>
+        <p className="text-xs text-neutral-600 leading-relaxed">
+          Suggestions come from users in categories you follow. Click "Apply" to
+          quickly vote or delegate based on user recommendations.
+          {!isVotingActive() && " Voting has ended for this proposal."}
+        </p>
       </div>
     </div>
   );

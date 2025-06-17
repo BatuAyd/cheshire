@@ -1,6 +1,7 @@
 import express from 'express';
 import { proposalDb, userDb, categoryDb } from '../database/supabase.js';
 import { requireJwtAuth } from '../middleware/jwtAuth.js';
+import { supabase } from '../database/supabase.js';
 
 const router = express.Router();
 
@@ -278,14 +279,14 @@ export const createProposalRoutes = () => {
   });
   
   /**
-   * Get proposal by ID
-   * GET /api/proposals/:id
-   * Requires JWT authentication
-   */
+ * Get proposal by ID with vote results for expired proposals
+ * GET /api/proposals/:id
+ * Requires JWT authentication
+ */
   router.get('/:id', requireJwtAuth, async (req, res) => {
     try {
       const { id } = req.params;
-      
+    
       // Validate UUID format
       const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
       if (!uuidPattern.test(id)) {
@@ -293,15 +294,15 @@ export const createProposalRoutes = () => {
           error: 'Invalid proposal ID format' 
         });
       }
-      
+    
       const proposal = await proposalDb.getById(id);
-      
+    
       if (!proposal) {
         return res.status(404).json({ 
           error: 'Proposal not found' 
         });
       }
-      
+    
       // Check if user is in the same organization
       const user = await userDb.getByWallet(req.walletAddress);
       if (user && user.organization_id !== proposal.organization_id) {
@@ -309,11 +310,56 @@ export const createProposalRoutes = () => {
           error: 'You can only view proposals from your organization' 
         });
       }
-      
-      res.status(200).json({ 
-        proposal 
-      });
-      
+    
+      // Check if proposal is expired and get vote results if available
+      const now = new Date();
+      const deadline = new Date(proposal.voting_deadline);
+      const isExpired = deadline <= now;
+    
+      let voteResults = null;
+    
+      if (isExpired) {
+        try {
+          // Try to get vote results from final_vote_results_audit
+          const { data: resultsData, error: resultsError } = await supabase
+            .from('final_vote_results_audit')
+            .select('vote_results, computed_at, status')
+            .eq('proposal_id', id)
+            .eq('status', 'completed')
+            .single();
+        
+          if (!resultsError && resultsData && resultsData.vote_results) {
+            voteResults = {
+              optionResults: resultsData.vote_results.optionResults || {},
+              metadata: resultsData.vote_results.metadata || {
+                totalVotingPower: 0,
+                totalVotesCast: 0,
+                winningOption: null
+              },
+              computedAt: resultsData.computed_at
+            };
+          }
+        } catch (error) {
+          console.warn(`Could not load vote results for proposal ${id}:`, error);
+          // Continue without results - not a fatal error
+        }
+      }
+    
+      // Build response
+      const response = {
+        proposal: {
+          ...proposal,
+          is_expired: isExpired
+        }
+      };
+    
+      // Only include vote results for expired proposals
+      if (isExpired && voteResults) {
+        response.vote_results = voteResults;
+      }
+    
+      res.status(200).json(response);
+    
     } catch (error) {
       console.error('Error getting proposal by ID:', error);
       res.status(500).json({ 
