@@ -35,7 +35,7 @@ const AboutPage = () => {
               <div className="w-2 h-2 bg-neutral-400 rounded-full mt-3"></div>
               <div>
                 <h3 className="text-2xl font-light text-neutral-800 mb-2">
-                  Delegate to experts
+                  Delegate to users
                 </h3>
                 <p className="text-neutral-500 border-l border-neutral-200 pl-4">
                   Let knowledgeable people handle complex decisions
@@ -212,7 +212,7 @@ const AboutPage = () => {
               <div className="w-6 h-6 border border-orange-400 rounded-sm bg-orange-50 mx-auto"></div>
               <h3 className="font-medium text-neutral-800">Guide</h3>
               <p className="text-neutral-500 text-sm">
-                See expert recommendations when voting
+                See user recommendations when voting
               </p>
             </div>
           </div>

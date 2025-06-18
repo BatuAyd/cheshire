@@ -1,11 +1,11 @@
 # Cheshire
 
-A liquid democracy platform that enables users to vote directly on proposals or delegate their voting power to trusted experts. Built with React, Node.js, PostgreSQL, and Redis.
+A liquid democracy platform that enables users to vote directly on proposals or delegate their voting power to trusted users. Built with React, Node.js, PostgreSQL, and Redis.
 
 ## Features
 
-- **Liquid Voting System**: Vote directly or delegate to experts with automatic chain resolution
-- **Category Based Expertise**: Follow category experts for voting recommendations and guidance
+- **Liquid Voting System**: Vote directly or delegate to users with automatic chain resolution
+- **Category Based Suggestion**: Follow categories created by users for voting recommendations and guidance
 - **Organization Management**: Secure organization based access with JWT authentication
 - **Proposal Management**: Create, view, and participate in organizational decision making
 - **Profile System**: User profiles with unique identifiers for delegation
@@ -45,7 +45,7 @@ A liquid democracy platform that enables users to vote directly on proposals or 
 The liquid voting system allows users to:
 
 - **Vote Directly**: Cast votes on proposals they understand or care about
-- **Delegate Power**: Assign voting power to trusted experts in specific areas
+- **Delegate Power**: Assign voting power to trusted users in specific areas
 - **Chain Resolution**: Automatic delegation chain following with cycle detection
 - **Weighted Counting**: Final vote tallies respect delegation chains and voting power
 
@@ -70,9 +70,9 @@ The system uses PostgreSQL for persistent data storage with the following schema
 
 ### Category System
 
-- **categories** - Expert categories for delegation guidance
-- **category_followers** - User subscriptions to expert categories
-- **category_suggestions** - Expert voting recommendations
+- **categories** - User categories for delegation guidance
+- **category_followers** - User subscriptions to user categories
+- **category_suggestions** - User voting recommendations
 
 ### Liquid Voting and Audit
 
@@ -372,8 +372,8 @@ npm run dev
 1. **Wallet Connection**: Users connect Ethereum wallets via RainbowKit
 2. **Profile Creation**: Complete user profile with organization membership
 3. **Authentication**: Sign message for JWT token authentication
-4. **Proposal Participation**: Vote directly or delegate to experts
-5. **Category Following**: Subscribe to expert categories for guidance
+4. **Proposal Participation**: Vote directly or delegate to users
+5. **Category Following**: Subscribe to user categories for guidance
 6. **Liquid Democracy**: System automatically resolves delegation chains
 
 ## Liquid Voting Process
@@ -387,7 +387,7 @@ npm run dev
 
 ### Delegation
 
-1. User selects expert by unique ID
+1. User selects delegation target user by unique ID
 2. Cycle detection prevents circular delegations
 3. Chain length validation ensures system performance
 4. Delegation stored in Redis with audit logging

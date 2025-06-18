@@ -348,7 +348,7 @@ const SuggestionForm: React.FC<SuggestionFormProps> = ({
                   />
                   <div>
                     <div className="font-medium text-neutral-800">
-                      Delegate to Expert
+                      Delegate to User
                     </div>
                     <div className="text-sm text-neutral-600">
                       Let someone else decide

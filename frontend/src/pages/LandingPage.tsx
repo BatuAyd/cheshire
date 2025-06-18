@@ -59,7 +59,7 @@ const LandingPage = () => {
             />
 
             <FeatureCard
-              title="Delegate to Experts"
+              title="Delegate to Users"
               description="Don't have time for every decision? Delegate your voting power to trusted representatives who share your values."
               icon={
                 <svg
@@ -81,7 +81,7 @@ const LandingPage = () => {
 
             <FeatureCard
               title="Follow Categories"
-              description="Follow category experts and get guidance on complex topics. Learn from specialists and make informed decisions."
+              description="Follow category users and get guidance on complex topics. Learn from specialists and make informed decisions."
               icon={
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
