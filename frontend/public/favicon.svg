@@ -1,0 +1,15 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- Off-white background -->
+  <rect width="32" height="32" fill="#FEFEFE" rx="4"/>
+  
+  <!-- Letter C in STIX Two Text -->
+  <text 
+    x="16" 
+    y="22" 
+    font-family="'STIX Two Text', serif" 
+    font-size="20" 
+    font-weight="600" 
+    text-anchor="middle" 
+    fill="#F97316"
+  >C</text>
+</svg>

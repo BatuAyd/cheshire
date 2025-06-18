@@ -29,22 +29,6 @@ interface Suggestion {
   };
 }
 
-interface VotingStatus {
-  has_voted: boolean;
-  has_delegated: boolean;
-  voted_option?: number;
-  delegate_info?: {
-    unique_id: string;
-    name: string;
-  };
-  selected_option?: {
-    option_number: number;
-    option_text: string;
-  };
-  can_act: boolean;
-  cooldown_active: boolean;
-}
-
 // Local components for loading and error states
 const ProposalDetailSkeleton = () => (
   <div className="bg-white rounded-xl shadow-lg p-8 animate-pulse">
@@ -168,7 +152,7 @@ const ProposalDetailPage: React.FC = () => {
 
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [votingStatus, setVotingStatus] = useState<VotingStatus | null>(null);
+  const [votingStatus, setVotingStatus] = useState<any>(null); // Changed to any to match full API response
   const [loading, setLoading] = useState(true);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [error, setError] = useState<string>("");
@@ -215,7 +199,7 @@ const ProposalDetailPage: React.FC = () => {
     loadProposal();
   }, [id]);
 
-  // Load voting status
+  // Load voting status - FIXED: Store full API response
   const loadVotingStatus = async (proposalId: string) => {
     try {
       const response = await apiFetch(
@@ -224,7 +208,7 @@ const ProposalDetailPage: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setVotingStatus(data.user_status);
+        setVotingStatus(data); // FIXED: was data.user_status, now data
       } else {
         console.warn("Failed to load voting status for suggestions");
         setVotingStatus(null);
@@ -235,9 +219,10 @@ const ProposalDetailPage: React.FC = () => {
     }
   };
 
-  // Set up cooldown refresh timer for suggestions
+  // Set up cooldown refresh timer for suggestions - FIXED: Access user_status properly
   useEffect(() => {
-    if (votingStatus?.cooldown_active && proposal) {
+    if (votingStatus?.user_status?.cooldown_active && proposal) {
+      // FIXED: added .user_status
       // Check if proposal is expired locally
       const now = new Date();
       const deadline = new Date(proposal.voting_deadline);
@@ -256,7 +241,7 @@ const ProposalDetailPage: React.FC = () => {
         return () => clearTimeout(cooldownTimer);
       }
     }
-  }, [votingStatus?.cooldown_active, proposal]);
+  }, [votingStatus?.user_status?.cooldown_active, proposal]); // FIXED: dependency also updated
 
   // Load suggestions and voting status
   useEffect(() => {
@@ -354,7 +339,6 @@ const ProposalDetailPage: React.FC = () => {
             Back to Proposals
           </button>
 
-          {/* Loading Skeleton */}
           <ProposalDetailSkeleton />
         </div>
       </div>
@@ -362,7 +346,7 @@ const ProposalDetailPage: React.FC = () => {
   }
 
   // Error state
-  if (error && !notFound) {
+  if (error) {
     return (
       <div className="min-h-[80vh] px-4 py-8">
         <div className="max-w-7xl mx-auto">
@@ -386,10 +370,10 @@ const ProposalDetailPage: React.FC = () => {
             Back to Proposals
           </button>
 
-          <div className="bg-red-50 border border-red-200 rounded-xl p-8 text-center">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="bg-white rounded-xl shadow-lg p-8 text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg
-                className="w-6 h-6 text-red-500"
+                className="w-8 h-8 text-red-500"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -402,17 +386,23 @@ const ProposalDetailPage: React.FC = () => {
                 />
               </svg>
             </div>
-            <h2 className="text-xl font-bold text-red-800 mb-2">
+            <h1 className="text-2xl font-bold text-neutral-800 mb-2">
               Error Loading Proposal
-            </h2>
-            <p className="text-red-600">{error}</p>
+            </h1>
+            <p className="text-neutral-600 mb-4">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+            >
+              Try Again
+            </button>
           </div>
         </div>
       </div>
     );
   }
 
-  // 404 state
+  // Not found state
   if (notFound) {
     return (
       <div className="min-h-[80vh] px-4 py-8">
@@ -570,7 +560,7 @@ const ProposalDetailPage: React.FC = () => {
                   proposal={proposal}
                   canCreateSuggestions={canCreateNewSuggestions}
                   onCreateSuggestion={() => setShowSuggestionForm(true)}
-                  userVotingStatus={votingStatus}
+                  userVotingStatus={votingStatus?.user_status} // FIXED: was votingStatus, now votingStatus?.user_status
                 />
               </div>
             )}

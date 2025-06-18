@@ -45,7 +45,7 @@ const Footer = () => {
 
             {/* GitHub - External Link */}
             <a
-              href="https://github.com/BatuAyd/web-app"
+              href="https://github.com/BatuAyd/cheshire"
               target="_blank"
               rel="noopener noreferrer"
               className="text-neutral-600 hover:text-orange-500 transition-colors flex items-center gap-1"
