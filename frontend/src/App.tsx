@@ -27,14 +27,8 @@ import {
   CategoriesPage,
   ProfilePage,
   CreateProposalPage,
+  NotFoundPage,
 } from "./pages";
-
-const NotFoundPage = () => (
-  <div>
-    <h1 className="text-3xl font-bold mb-4">404 - Page Not Found</h1>
-    <p>The page you're looking for doesn't exist.</p>
-  </div>
-);
 
 // Component with auth sync
 const AuthSyncWrapper = ({ children }: { children: React.ReactNode }) => {

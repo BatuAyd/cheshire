@@ -7,3 +7,4 @@ export { default as ProposalDetailPage } from './ProposalDetailPage';
 export { default as CategoriesPage } from './CategoriesPage';
 export { default as ProfilePage } from './ProfilePage';
 export { default as CreateProposalPage } from './CreateProposalPage';
+export { default as NotFoundPage } from './NotFoundPage';
