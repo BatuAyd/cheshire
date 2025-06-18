@@ -16,6 +16,7 @@ A liquid democracy platform that enables users to vote directly on proposals or 
 ## Technology Stack
 
 ### Frontend
+
 - React 19 with TypeScript
 - Tailwind CSS for styling
 - Vite for build tooling
@@ -24,6 +25,7 @@ A liquid democracy platform that enables users to vote directly on proposals or 
 - TanStack Query for state management
 
 ### Backend
+
 - Node.js with Express
 - PostgreSQL via Supabase
 - Upstash Redis for voting calculations
@@ -31,6 +33,7 @@ A liquid democracy platform that enables users to vote directly on proposals or 
 - CORS enabled API
 
 ### Infrastructure
+
 - Supabase for database and real time features
 - Upstash Redis for liquid voting operations
 - Environment based configuration
@@ -40,12 +43,14 @@ A liquid democracy platform that enables users to vote directly on proposals or 
 ### Liquid Democracy Implementation
 
 The liquid voting system allows users to:
+
 - **Vote Directly**: Cast votes on proposals they understand or care about
 - **Delegate Power**: Assign voting power to trusted experts in specific areas
 - **Chain Resolution**: Automatic delegation chain following with cycle detection
 - **Weighted Counting**: Final vote tallies respect delegation chains and voting power
 
 ### Data Flow
+
 1. **Vote Storage**: Redis stores real time voting and delegation data
 2. **Chain Resolution**: Automated processing resolves delegation chains using graph algorithms
 3. **Vote Counting**: Final tallies calculated with proper voting power weights
@@ -57,23 +62,27 @@ The liquid voting system allows users to:
 The system uses PostgreSQL for persistent data storage with the following schema:
 
 ### Core Tables
+
 - **organizations** - Organization management
 - **users** - User profiles with wallet addresses and unique identifiers
 - **proposals** - Proposal data with voting deadlines and validation
 - **proposal_options** - Voting options for each proposal (1-10 options)
 
 ### Category System
+
 - **categories** - Expert categories for delegation guidance
 - **category_followers** - User subscriptions to expert categories
 - **category_suggestions** - Expert voting recommendations
 
 ### Liquid Voting and Audit
+
 - **vote_audit** - Complete audit trail for all voting actions
 - **delegation_resolution_audit** - Delegation chain resolution results
 - **final_vote_results_audit** - Final vote counting with metadata
 - **redis_snapshots** - Backup system for Redis voting data
 
 ### Authentication
+
 - **user_sessions** - JWT token management and session control
 
 ### Schema
@@ -233,6 +242,7 @@ CREATE TABLE public.vote_audit (
 ## API Endpoints
 
 ### Authentication
+
 - `GET /api/auth/nonce` - Generate signing nonce
 - `GET /api/auth/check-user` - Check user profile status
 - `POST /api/auth/signin` - JWT authentication
@@ -240,6 +250,7 @@ CREATE TABLE public.vote_audit (
 - `POST /api/auth/signout` - Invalidate session
 
 ### User Management
+
 - `GET /api/user/exists` - Check if user exists
 - `GET /api/user/unique-id/check` - Validate unique ID availability
 - `GET /api/user/organization/check` - Verify organization exists
@@ -249,6 +260,7 @@ CREATE TABLE public.vote_audit (
 - `GET /api/user/organization/users` - Get organization members
 
 ### Proposals
+
 - `POST /api/proposals/create` - Create new proposal
 - `GET /api/proposals/my-proposals` - Get user proposals
 - `GET /api/proposals/organization` - Get organization proposals
@@ -257,6 +269,7 @@ CREATE TABLE public.vote_audit (
 - `GET /api/proposals/:id/suggestions` - Get category suggestions
 
 ### Liquid Voting
+
 - `POST /api/proposals/:id/vote` - Cast direct vote
 - `DELETE /api/proposals/:id/vote` - Remove vote
 - `POST /api/proposals/:id/delegate` - Set delegation
@@ -264,6 +277,7 @@ CREATE TABLE public.vote_audit (
 - `GET /api/proposals/:id/voting-status` - Get user voting status
 
 ### Categories
+
 - `GET /api/categories/organization` - Get organization categories
 - `POST /api/categories/create` - Create new category
 - `GET /api/categories/:id` - Get category details
@@ -272,12 +286,14 @@ CREATE TABLE public.vote_audit (
 - `POST /api/categories/:id/suggest` - Create voting suggestion
 
 ### System
+
 - `GET /api/status` - System health check
 - `GET /api/debug/redis` - Redis connection status
 
 ## Setup Instructions
 
 ### Prerequisites
+
 - Node.js 18+
 - PostgreSQL database (Supabase recommended)
 - Upstash Redis account
@@ -287,6 +303,7 @@ CREATE TABLE public.vote_audit (
 ### Environment Configuration
 
 #### Backend (.env)
+
 ```bash
 # Redis Configuration (Upstash)
 UPSTASH_REDIS_REST_URL=https://your-redis-url.upstash.io
@@ -306,6 +323,7 @@ JWT_SECRET=your_jwt_secret
 ```
 
 #### Frontend (.env)
+
 ```bash
 # Backend API URL
 VITE_BACKEND_URL=http://localhost:8080
@@ -334,6 +352,7 @@ VITE_WALLETCONNECT_PROJECT_ID=your_project_id
 ### Installation
 
 #### Backend
+
 ```bash
 cd server
 npm install
@@ -341,8 +360,9 @@ npm run dev
 ```
 
 #### Frontend
+
 ```bash
-cd cheshire
+cd frontend
 npm install
 npm run dev
 ```
@@ -359,24 +379,28 @@ npm run dev
 ## Liquid Voting Process
 
 ### Vote Casting
+
 1. User selects proposal option
 2. Vote stored in Redis with rate limiting
 3. Any existing delegation automatically removed
 4. Action logged to audit trail
 
 ### Delegation
+
 1. User selects expert by unique ID
 2. Cycle detection prevents circular delegations
 3. Chain length validation ensures system performance
 4. Delegation stored in Redis with audit logging
 
 ### Chain Resolution
+
 1. Automated processing every 24 hours for expired proposals
 2. Graph traversal algorithms resolve delegation chains
 3. Voting power calculated based on chain endpoints
 4. Results stored in PostgreSQL audit tables
 
 ### Final Counting
+
 1. Weighted vote tallies respect delegation chains
 2. Each user contributes exactly one unit of voting power
 3. Final results include detailed voter breakdowns
