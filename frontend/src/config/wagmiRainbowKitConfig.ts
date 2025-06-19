@@ -5,7 +5,7 @@ import { QueryClient } from "@tanstack/react-query";
 import '@rainbow-me/rainbowkit/styles.css';
 
 // Use your environment variables to set the project ID and Infura API key
-const projectId = import.meta.env.VITE_PROJECT_ID || "YOUR_PROJECT_ID";
+const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
 if (!projectId) {
     throw new Error("Missing WalletConnect Project ID. Please add it to your .env file.");
 }
