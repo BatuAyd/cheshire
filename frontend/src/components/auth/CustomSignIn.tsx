@@ -149,7 +149,7 @@ const CustomSignIn = () => {
       className={`px-4 py-2 rounded-lg bg-green-500 text-white font-medium transition-all ${
         loading
           ? "opacity-70 cursor-not-allowed"
-          : "hover:bg-green-600 active:scale-95"
+          : "hover:bg-green-600 active:scale-95 cursor-pointer"
       }`}
     >
       {loading ? "Signing..." : "Sign In"}
