@@ -7,10 +7,14 @@ import {
   useSupabaseAuthActions,
 } from "../../store/supabaseAuthStore";
 import { CustomSignIn } from "../auth";
+import MobileMenu from "./MobileMenu";
 
 const Navbar = () => {
   // State to track scroll position for blur effect
   const [scrolled, setScrolled] = useState<boolean>(false);
+
+  // State for mobile menu
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   // Get auth state from JWT store
   const { isAuthenticated } = useSupabaseAuthStore();
@@ -58,6 +62,29 @@ const Navbar = () => {
     >
       {/* Brand/Logo - Left side */}
       <div className="flex items-center">
+        {/* Mobile Menu Button - Show only when authenticated and on mobile */}
+        {isAuthenticated && (
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="md:hidden p-2 rounded-lg hover:bg-neutral-100 transition-colors mr-2"
+            aria-label="Toggle menu"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="#FF9850"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            </svg>
+          </button>
+        )}
+
         <Link to="/" className="flex items-center select-none ml-2">
           <h1
             className="text-xl md:text-3xl font-semibold text-neutral-800"
@@ -195,7 +222,7 @@ const Navbar = () => {
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth={2}
-                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013 3v1"
                           />
                         </svg>
                       </button>
@@ -207,6 +234,13 @@ const Navbar = () => {
           }}
         </ConnectButton.Custom>
       </div>
+
+      {/* Mobile Menu */}
+      <MobileMenu
+        isOpen={isMobileMenuOpen}
+        onClose={() => setIsMobileMenuOpen(false)}
+        isAuthenticated={isAuthenticated}
+      />
     </nav>
   );
 };
