@@ -134,7 +134,7 @@ const CustomSignIn = () => {
     return (
       <button
         onClick={() => (window.location.href = "/setup")}
-        className="px-4 py-2 rounded-lg bg-orange-500 text-white font-medium transition-all hover:bg-orange-600 active:scale-95"
+        className="px-4 py-2 rounded-lg bg-orange-400 text-white font-medium transition-all hover:bg-orange-500 active:scale-95"
       >
         Complete Setup
       </button>

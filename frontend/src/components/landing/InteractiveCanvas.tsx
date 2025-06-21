@@ -22,7 +22,7 @@ interface MousePosition {
 
 // Configuration constants
 const CONFIG = {
-  PARTICLES_DESKTOP: 85,
+  PARTICLES_DESKTOP: 90,
   PARTICLES_MOBILE: 50,
   MOBILE_BREAKPOINT: 768,
   MOUSE_INFLUENCE_RADIUS: 120,

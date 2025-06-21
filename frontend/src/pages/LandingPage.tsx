@@ -27,7 +27,7 @@ const LandingPage = () => {
             </p>
             <button
               onClick={handleGetStarted}
-              className="px-8 py-3 bg-orange-500 text-white rounded-lg font-medium text-lg shadow-md hover:bg-orange-600 hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer"
+              className="px-8 py-3 bg-orange-400 text-white rounded-lg font-medium text-lg shadow-md hover:bg-orange-500 hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer"
             >
               Get Started
             </button>

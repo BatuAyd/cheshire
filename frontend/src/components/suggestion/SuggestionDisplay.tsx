@@ -367,7 +367,7 @@ const SuggestionDisplay: React.FC<SuggestionDisplayProps> = ({
           {canCreateSuggestions && canUserCreateSuggestions && (
             <button
               onClick={onCreateSuggestion}
-              className="px-6 py-3 bg-orange-400 text-white rounded-lg font-medium transition-all hover:bg-orange-500 hover:shadow-md active:scale-95"
+              className="px-6 py-3 bg-orange-400 text-white rounded-lg font-medium transition-all hover:bg-orange-500 hover:shadow-md active:scale-95 cursor-pointer"
             >
               Create First Suggestion
             </button>

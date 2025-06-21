@@ -63,14 +63,12 @@ const SuggestionForm: React.FC<SuggestionFormProps> = ({
       try {
         setLoadingCategories(true);
         const response = await apiFetch(
-          `${API_BASE}/api/categories/organization?limit=200&offset=0`
+          `${API_BASE}/api/categories/my-categories?limit=200&offset=0`
         );
 
         if (response.ok) {
           const data = await response.json();
-          // Only show categories created by the current user
-          // Note: We'll need to get current user's wallet address to filter properly
-          // For now, we'll show all categories and let the backend validate ownership
+          // Get only categories created by the current user
           setUserCategories(data.categories || []);
 
           // Auto-select first category if available

@@ -68,7 +68,7 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
           onClick={handleFollowClick}
           className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
             category.is_following
-              ? "bg-orange-500 text-white hover:bg-orange-600"
+              ? "bg-orange-400 text-white hover:bg-orange-500"
               : "bg-neutral-200 text-neutral-700 hover:bg-neutral-300"
           }`}
         >
